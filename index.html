@@ -396,6 +396,43 @@ canvas.overview-canvas {
   canvas.overview-canvas { aspect-ratio: 2.4 / 1; }
 }
 
+.overview-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  width: fit-content;
+}
+
+.overview-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 5px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.overview-tab:hover { color: var(--text); background: #1f2330; }
+
+.overview-tab.active {
+  background: var(--accent);
+  color: #0f1117;
+}
+
+.overview-tab.active:hover { background: var(--accent); }
+
+.overview-tab sub { font-size: 0.78em; }
+
 .denoise-section {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -500,6 +537,131 @@ canvas.overview-canvas {
   .denoise-row { flex-direction: column; align-items: stretch; gap: 8px; }
   .denoise-row-label { flex: 0 0 auto; }
 }
+
+/* ─── Strength slider (denoise section) ─────────────────────────────── */
+.strength-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.strength-control input[type="range"] {
+  flex: 1;
+  min-width: 200px;
+  max-width: 360px;
+}
+.strength-readout {
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", monospace;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  min-width: 140px;
+}
+.strength-readout span { color: var(--text-dim); }
+.strength-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  flex: 1 1 100%;
+  margin-top: 2px;
+}
+
+/* ─── Takeaway box ──────────────────────────────────────────────────── */
+.takeaway {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 22px;
+}
+.takeaway h3 {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.takeaway p {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0;
+}
+.takeaway p strong { color: var(--text); font-weight: 500; }
+.takeaway .takeaway-t {
+  font-family: ui-monospace, "SF Mono", monospace;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Final quality (MSE/PSNR/SSIM at t=0) ──────────────────────────── */
+.final-quality {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.final-quality h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.final-quality-explain {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 720px) { .metric-grid { grid-template-columns: 1fr; } }
+.metric-card {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.metric-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 3px;
+}
+.metric-card[data-schedule="linear"]::before { background: var(--linear); }
+.metric-card[data-schedule="cosine"]::before { background: var(--cosine); }
+.metric-card[data-schedule="exponential"]::before { background: var(--exponential); }
+.metric-card-name {
+  font-size: 12px;
+  font-weight: 600;
+  padding-left: 6px;
+}
+.metric-card[data-schedule="linear"]      .metric-card-name { color: var(--linear); }
+.metric-card[data-schedule="cosine"]      .metric-card-name { color: var(--cosine); }
+.metric-card[data-schedule="exponential"] .metric-card-name { color: var(--exponential); }
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  padding-left: 6px;
+}
+.metric-row .name { color: var(--text-muted); }
+.metric-row .value { color: var(--text); }
+.metric-row .value.best { color: var(--cosine); font-weight: 600; }
+.metric-row .value.worst { color: var(--exponential); }
+
 </style>
 </head>
 <body>
@@ -538,8 +700,13 @@ canvas.overview-canvas {
 
   <section class="overview-card">
     <div class="overview-header">
-      <h2>Overview · Signal Retention (ᾱ<sub>t</sub>)</h2>
-      <p>All three schedules at a glance: <span class="linear-text">Linear</span> drops fastest in the middle, <span class="cosine-text">Cosine</span> stays smoother throughout, <span class="exponential-text">Exponential</span> holds high signal early then collapses sharply near t=T.</p>
+      <h2 id="overview-title">Overview · Signal Retention (ᾱ<sub>t</sub>)</h2>
+      <p id="overview-subtitle">All three schedules at a glance: <span class="linear-text">Linear</span> drops fastest in the middle, <span class="cosine-text">Cosine</span> stays smoother throughout, <span class="exponential-text">Exponential</span> holds high signal early then collapses sharply near t=T.</p>
+    </div>
+    <div class="overview-tabs" id="overview-tabs">
+      <button class="overview-tab active" data-view="signal">Signal retention ᾱ<sub>t</sub></button>
+      <button class="overview-tab"        data-view="noise">Noise amount 1−ᾱ<sub>t</sub></button>
+      <button class="overview-tab"        data-view="snr">SNR</button>
     </div>
     <canvas class="overview-canvas" id="overview-canvas"></canvas>
   </section>
@@ -597,6 +764,11 @@ canvas.overview-canvas {
     </div>
   </section>
 
+  <aside class="takeaway" id="takeaway">
+    <h3>Takeaway · <span class="takeaway-t" id="takeaway-t">t = 0</span></h3>
+    <p id="takeaway-text">Drag the timestep slider to compare schedule effects across the noising trajectory.</p>
+  </aside>
+
   <section class="denoise-section">
     <div class="denoise-header">
       <h2>Denoising · Image-to-Image (SDEdit-style reverse)</h2>
@@ -605,6 +777,12 @@ canvas.overview-canvas {
         <code>t* = strength · T</code> (not from pure Gaussian noise) and η-DDIM-samples down
         to <code>x<sub>0</sub></code> using a real pretrained denoiser.
       </p>
+    </div>
+    <div class="strength-control">
+      <label class="control-label" for="strength-slider">Strength</label>
+      <input type="range" id="strength-slider" min="0" max="0" step="1" value="0" disabled>
+      <span class="strength-readout">strength <span id="strength-val">—</span> · t* <span id="tstar-val">—</span></span>
+      <p class="strength-hint">Higher strength = more forward noise before denoising → heavier model influence on output. Lower strength preserves more of your source.</p>
     </div>
     <div class="denoise-row" data-schedule="linear">
       <div class="denoise-row-label">Linear<small>DDPM</small></div>
@@ -645,7 +823,35 @@ canvas.overview-canvas {
         <div class="denoise-frame"><canvas></canvas><span>—</span></div>
       </div>
     </div>
-    <div class="denoise-arrow">noise · t = T  ────────────────────────────►  recovered · t = 0</div>
+    <div class="denoise-arrow">noise · t = t*  ────────────────────────────►  recovered · t = 0</div>
+    <div class="final-quality">
+      <h3>Final Quality (t = 0)</h3>
+      <p class="final-quality-explain">
+        Quantitative + visual comparison of each schedule's recovered image against the source.
+        Lower <strong>MSE</strong> = closer pixel match. Higher <strong>PSNR</strong> (dB) = less distortion.
+        Higher <strong>SSIM</strong> ∈ [-1, 1] = better structural similarity. Best score per metric is highlighted.
+      </p>
+      <div class="metric-grid" id="metric-grid">
+        <div class="metric-card" data-schedule="linear">
+          <div class="metric-card-name">Linear</div>
+          <div class="metric-row"><span class="name">MSE</span>  <span class="value" data-metric="mse">—</span></div>
+          <div class="metric-row"><span class="name">PSNR</span> <span class="value" data-metric="psnr">—</span></div>
+          <div class="metric-row"><span class="name">SSIM</span> <span class="value" data-metric="ssim">—</span></div>
+        </div>
+        <div class="metric-card" data-schedule="cosine">
+          <div class="metric-card-name">Cosine</div>
+          <div class="metric-row"><span class="name">MSE</span>  <span class="value" data-metric="mse">—</span></div>
+          <div class="metric-row"><span class="name">PSNR</span> <span class="value" data-metric="psnr">—</span></div>
+          <div class="metric-row"><span class="name">SSIM</span> <span class="value" data-metric="ssim">—</span></div>
+        </div>
+        <div class="metric-card" data-schedule="exponential">
+          <div class="metric-card-name">Exponential</div>
+          <div class="metric-row"><span class="name">MSE</span>  <span class="value" data-metric="mse">—</span></div>
+          <div class="metric-row"><span class="name">PSNR</span> <span class="value" data-metric="psnr">—</span></div>
+          <div class="metric-row"><span class="name">SSIM</span> <span class="value" data-metric="ssim">—</span></div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <footer class="insight">
@@ -730,20 +936,23 @@ let activeImageId = null;     // current selection (set after manifest loads)
 let seedIdx = 0;
 let currentSeed = SEEDS[0];
 let currentT = 0;
+let strengthIdx = 0;          // index into manifest.strengths
+let activeStrength = 0.5;     // updated when manifest loads / slider moves
+let overviewView = "signal";  // "signal" | "noise" | "snr"
 let playing = false;
 let playRaf = null;
 let lastFrameTime = 0;
 let playT = 0;
 
 // In-memory caches.
-//   sourceImageDataCache: imageId -> ImageData (256×256 RGBA from images/<id>.<ext>)
-//                                    used for in-browser forward noising every slider tick.
-//   noiseCache:           seed    -> Float32Array(IMG_SIZE*IMG_SIZE*3) — Gaussian ε.
-//   frameCache:           "<imageId>:<seed>:<schedule>" -> { denoise: [{t,img}, …] }
-//                                    cached PNGs from results/ for the denoise strip.
+//   sourceImageDataCache: imageId -> ImageData (IMG_SIZE×IMG_SIZE RGBA from images/<id>.<ext>)
+//   noiseCache:           seed    -> Float32Array(IMG_SIZE*IMG_SIZE*3) Gaussian ε.
+//   frameCache:           "<image>:<seed>:<sched>:<strength>" -> { denoise: [{t,img}, …] }
+//   metricCache:          same key -> { linear?, cosine?, exponential? -> {mse,psnr,ssim} }
 const sourceImageDataCache = Object.create(null);
 const noiseCache           = Object.create(null);
 const frameCache           = Object.create(null);
+const metricCache          = Object.create(null);
 
 const imageSelectEl  = document.getElementById("image-select");
 const regenNoiseBtn  = document.getElementById("regen-noise-btn");
@@ -756,6 +965,15 @@ const playBtn        = document.getElementById("play-btn");
 const resetBtn       = document.getElementById("reset-btn");
 const panels         = document.querySelectorAll(".panel");
 const overviewCanvas = document.getElementById("overview-canvas");
+const overviewTabsEl = document.getElementById("overview-tabs");
+const overviewTitleEl    = document.getElementById("overview-title");
+const overviewSubtitleEl = document.getElementById("overview-subtitle");
+const strengthSlider = document.getElementById("strength-slider");
+const strengthValEl  = document.getElementById("strength-val");
+const tstarValEl     = document.getElementById("tstar-val");
+const takeawayTEl    = document.getElementById("takeaway-t");
+const takeawayTextEl = document.getElementById("takeaway-text");
+const metricGridEl   = document.getElementById("metric-grid");
 
 tMaxEl.textContent = T;
 tSlider.max = T;
@@ -927,7 +1145,7 @@ function drawCurve(canvas, alphasBar, t, color) {
   ctx.textAlign = "center";
   ctx.fillStyle = "#9ca3af";
   ctx.font = "11px ui-monospace, monospace";
-  ctx.fillText("ᾱ_t", 0, 0);
+  ctx.fillText("ᾱₜ", 0, 0);
   ctx.restore();
 
   // filled area under the signal-retention curve
@@ -978,9 +1196,71 @@ function drawCurve(canvas, alphasBar, t, color) {
   ctx.stroke();
 }
 
+// ─── Overview chart views ───────────────────────────────────────────────────
+// Each tab is a thin config: how to compute y from ᾱ_t, axis range, label,
+// legend formatter. drawOverviewChart() is otherwise generic.
+const OVERVIEW_VIEWS = {
+  signal: {
+    title: "Overview · Signal Retention (ᾱ<sub>t</sub>)",
+    subtitle: 'All three schedules at a glance: <span class="linear-text">Linear</span> drops fastest in the middle, <span class="cosine-text">Cosine</span> stays smoother throughout, <span class="exponential-text">Exponential</span> holds high signal early then collapses sharply near t=T.',
+    yLabel:  "ᾱₜ (signal retention)",
+    yMin:    0,
+    yMax:    1,
+    yTicks:  [0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    fmtY:    (v) => v.toFixed(1),
+    valueFn: (a) => a,
+    legendKey: "ᾱ",
+    legendFmt: (a) => fmt(a),
+  },
+  noise: {
+    title: "Overview · Noise Amount (1 − ᾱ<sub>t</sub>)",
+    subtitle: 'Mirror of signal retention: how much of x<sub>t</sub> is pure ε. <span class="linear-text">Linear</span> gains noise fastest mid-schedule; <span class="cosine-text">Cosine</span> ramps up smoothly; <span class="exponential-text">Exponential</span> stays gentle then jumps near the end.',
+    yLabel:  "1 − ᾱₜ (noise amount)",
+    yMin:    0,
+    yMax:    1,
+    yTicks:  [0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    fmtY:    (v) => v.toFixed(1),
+    valueFn: (a) => 1 - a,
+    legendKey: "1−ᾱ",
+    legendFmt: (a) => fmt(1 - a),
+  },
+  snr: {
+    // SNR = ᾱ_t / (1 − ᾱ_t). Plotted on log10 axis because it spans many
+    // orders of magnitude (≈ 10^4 at t≈0 down to 10^-9 near t=T).
+    title: "Overview · Signal-to-Noise Ratio  (log scale)",
+    subtitle: "SNR<sub>t</sub> = ᾱ<sub>t</sub> / (1 − ᾱ<sub>t</sub>). Plotted on a log axis (each gridline = 10×). Where the line crosses SNR=1 marks the timestep where signal and noise contribute equally.",
+    yLabel:  "log₁₀ SNR",
+    yMin:    -4,
+    yMax:    4,
+    yTicks:  [-4, -2, 0, 2, 4],
+    fmtY:    (v) => "10" + supScript(v),
+    valueFn: (a) => Math.log10(safeSnr(a)),
+    legendKey: "SNR",
+    legendFmt: (a) => formatSnr(safeSnr(a)),
+  },
+};
+
+function safeSnr(a) {
+  // Clamp a away from {0, 1} so log(SNR) and log10(SNR) stay finite.
+  const aa = Math.min(Math.max(a, 1e-12), 1 - 1e-12);
+  return aa / (1 - aa);
+}
+function supScript(n) {
+  const map = { "-": "⁻", "0": "⁰", "1": "¹", "2": "²", "3": "³",
+                "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹" };
+  return String(n).split("").map(c => map[c] || c).join("");
+}
+function formatSnr(s) {
+  if (s >= 1000) return s.toExponential(1);
+  if (s >= 1)    return s.toFixed(2);
+  if (s >= 1e-3) return s.toFixed(3);
+  return s.toExponential(1);
+}
+
 function drawOverviewChart() {
   const canvas = overviewCanvas;
   if (!canvas) return;
+  const view = OVERVIEW_VIEWS[overviewView] || OVERVIEW_VIEWS.signal;
   const dpr = window.devicePixelRatio || 1;
   const cssW = canvas.clientWidth;
   const cssH = canvas.clientHeight;
@@ -995,39 +1275,40 @@ function drawOverviewChart() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
 
-  const padL = 56, padR = 132, padT = 16, padB = 30;
+  const padL = 64, padR = 138, padT = 16, padB = 30;
   const innerW = cssW - padL - padR;
   const innerH = cssH - padT - padB;
   if (innerW <= 0 || innerH <= 0) return;
 
-  // grid lines
+  const yToPx = (v) => padT + (1 - (v - view.yMin) / (view.yMax - view.yMin)) * innerH;
+  const tToPx = (t) => padL + (t / T) * innerW;
+
+  // Y gridlines + labels
   ctx.strokeStyle = "#262a36";
   ctx.lineWidth = 1;
-  for (let i = 0; i <= 5; i++) {
-    const y = padT + (i / 5) * innerH;
-    ctx.beginPath();
-    ctx.moveTo(padL, y);
-    ctx.lineTo(padL + innerW, y);
-    ctx.stroke();
-  }
-  for (let i = 1; i <= 3; i++) {
-    const x = padL + (i / 4) * innerW;
-    ctx.beginPath();
-    ctx.moveTo(x, padT);
-    ctx.lineTo(x, padT + innerH);
-    ctx.stroke();
-  }
-
-  // y-axis labels
   ctx.fillStyle = "#9ca3af";
   ctx.font = "10px ui-monospace, monospace";
   ctx.textAlign = "right";
-  for (let i = 0; i <= 5; i++) {
-    const v = 1 - i / 5;
-    const y = padT + (i / 5) * innerH + 3;
-    ctx.fillText(v.toFixed(1), padL - 6, y);
+  for (const ytick of view.yTicks) {
+    const y = yToPx(ytick);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + innerW, y); ctx.stroke();
+    ctx.fillText(view.fmtY(ytick), padL - 6, y + 3);
   }
-  // x-axis labels
+  // Highlight y=0 axis if it's inside the range (the SNR=1 / "equal" line)
+  if (view.yMin < 0 && view.yMax > 0) {
+    const y0 = yToPx(0);
+    ctx.strokeStyle = "#3a4150";
+    ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(padL + innerW, y0); ctx.stroke();
+  }
+
+  // X gridlines
+  ctx.strokeStyle = "#262a36";
+  for (let i = 1; i <= 3; i++) {
+    const x = padL + (i / 4) * innerW;
+    ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + innerH); ctx.stroke();
+  }
+
+  // X-axis labels
   ctx.textAlign = "center";
   for (let i = 0; i <= 4; i++) {
     const tv = Math.round(T * i / 4);
@@ -1035,28 +1316,32 @@ function drawOverviewChart() {
     ctx.fillText(tv.toString(), x, padT + innerH + 16);
   }
 
-  // axis titles
+  // Axis titles
   ctx.fillStyle = "#9ca3af";
   ctx.font = "11px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("timestep t", padL + innerW / 2, cssH - 4);
   ctx.save();
-  ctx.translate(16, padT + innerH / 2);
+  ctx.translate(18, padT + innerH / 2);
   ctx.rotate(-Math.PI / 2);
-  ctx.fillText("ᾱ_t (signal retention)", 0, 0);
+  ctx.fillText(view.yLabel, 0, 0);
   ctx.restore();
 
   const order = ["linear", "cosine", "exponential"];
 
-  // curves
+  // Curves
   for (const name of order) {
     const sched = schedules[name];
     ctx.beginPath();
+    let started = false;
     for (let i = 0; i <= T; i += 2) {
-      const x = padL + (i / T) * innerW;
-      const y = padT + (1 - sched.alphasBar[i]) * innerH;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      const v = view.valueFn(sched.alphasBar[i]);
+      if (!isFinite(v)) continue;
+      const yClamped = Math.max(view.yMin, Math.min(view.yMax, v));
+      const x = tToPx(i);
+      const y = yToPx(yClamped);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else            ctx.lineTo(x, y);
     }
     ctx.strokeStyle = sched.color;
     ctx.lineWidth = 2.5;
@@ -1064,31 +1349,29 @@ function drawOverviewChart() {
     ctx.stroke();
   }
 
-  // current-t marker line
-  const dx = padL + (currentT / T) * innerW;
+  // Current-t marker line
+  const dx = tToPx(currentT);
   ctx.strokeStyle = "#9ca3af66";
   ctx.setLineDash([3, 4]);
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(dx, padT);
-  ctx.lineTo(dx, padT + innerH);
-  ctx.stroke();
+  ctx.moveTo(dx, padT); ctx.lineTo(dx, padT + innerH); ctx.stroke();
   ctx.setLineDash([]);
 
-  // dots at current t for each schedule
+  // Dots at current t for each schedule
   for (const name of order) {
     const sched = schedules[name];
-    const dy = padT + (1 - sched.alphasBar[currentT]) * innerH;
+    const v = view.valueFn(sched.alphasBar[currentT]);
+    if (!isFinite(v)) continue;
+    const yClamped = Math.max(view.yMin, Math.min(view.yMax, v));
+    const dy = yToPx(yClamped);
     ctx.beginPath();
     ctx.arc(dx, dy, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff";
-    ctx.fill();
-    ctx.strokeStyle = sched.color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.strokeStyle = sched.color; ctx.lineWidth = 2; ctx.stroke();
   }
 
-  // legend
+  // Legend (per-view value at current t)
   const legendX = padL + innerW + 18;
   let legendY = padT + 12;
   ctx.textAlign = "left";
@@ -1101,7 +1384,8 @@ function drawOverviewChart() {
     ctx.fillText(name, legendX + 20, legendY + 1);
     ctx.fillStyle = "#9ca3af";
     ctx.font = "10px ui-monospace, monospace";
-    ctx.fillText("ᾱ=" + fmt(sched.alphasBar[currentT]), legendX + 20, legendY + 15);
+    ctx.fillText(view.legendKey + "=" + view.legendFmt(sched.alphasBar[currentT]),
+                 legendX + 20, legendY + 15);
     legendY += 32;
   }
 }
@@ -1147,6 +1431,7 @@ function render() {
     drawCurve(panel.querySelector(".curve-canvas"), sched.alphasBar, currentT, sched.color);
   });
   drawOverviewChart();
+  updateTakeaway();
 }
 
 // ─── Cached frame rendering (loaded from results/ written by generate_cache.py) ─
@@ -1168,10 +1453,25 @@ function setCacheStatus(text, kind) {
 // strength<1 starts reverse from a partially-noised version of the source;
 // strength=1 is full unconditional generation from pure noise.
 function img2imgTag() {
-  if (!manifest || manifest.strength == null) return "";
-  const s = manifest.strength;
+  if (!manifest) return "";
+  const s = activeStrength;
+  if (s == null) return "";
   if (s >= 0.999) return "gen · ";
-  return "img2img " + s.toFixed(2) + " (t*=" + manifest.t_start + ") · ";
+  const tStar = currentTStar();
+  return "img2img " + s.toFixed(2) + " (t*=" + tStar + ") · ";
+}
+
+function strengthTag(s) {
+  return "s" + String(Math.round(s * 100)).padStart(3, "0");
+}
+
+function currentTStar() {
+  if (!manifest) return Math.round(activeStrength * T);
+  const tag = strengthTag(activeStrength);
+  if (manifest.t_start_per_strength && tag in manifest.t_start_per_strength) {
+    return manifest.t_start_per_strength[tag];
+  }
+  return Math.round(activeStrength * T);
 }
 
 // Manifest + URL helpers ─────────────────────────────────────────────────────
@@ -1193,35 +1493,45 @@ async function fetchManifest() {
   return r.json();
 }
 
-// Matches generate_cache.py: <image>/<schedule>_schedule_frames/seed_<n>/<kind>_<i>_t<TTTT>.png
-function frameUrl(imageId, scheduleName, seed, kind, idx, t) {
-  return RESULTS_DIR + imageId + "/" + scheduleName + "_schedule_frames/seed_" + seed +
-         "/" + kind + "_" + idx + "_t" + padT(t) + ".png";
+// Matches generate_cache.py:
+//   <image>/<schedule>_schedule_frames/seed_<n>/<sTag>/denoise_<i>_t<TTTT>.png
+// Forward frames don't have the strength tag (they're strength-independent).
+function frameUrl(imageId, scheduleName, seed, kind, idx, t, sTag) {
+  const stem = RESULTS_DIR + imageId + "/" + scheduleName + "_schedule_frames/seed_" + seed + "/";
+  if (kind === "denoise" && sTag) {
+    return stem + sTag + "/denoise_" + idx + "_t" + padT(t) + ".png";
+  }
+  return stem + kind + "_" + idx + "_t" + padT(t) + ".png";
 }
 
-// Manifest may emit either:
-//  - new format: denoise_timesteps (img2img with strength<1)
-//  - old format: frame_timesteps (single shared array)
-// Forward timesteps aren't used — forward noising is computed in-browser.
-function denoiseTimesteps() {
-  return (manifest && (manifest.denoise_timesteps || manifest.frame_timesteps)) || [];
+// Per-strength denoise timesteps (manifest.denoise_timesteps_per_strength).
+// Falls back to legacy single-array formats so older manifests still work.
+function denoiseTimestepsFor(strength) {
+  if (!manifest) return [];
+  const tag = strengthTag(strength);
+  const perS = manifest.denoise_timesteps_per_strength;
+  if (perS && perS[tag]) return perS[tag];
+  return manifest.denoise_timesteps || manifest.frame_timesteps || [];
 }
 
-// Eagerly load denoise PNGs for this (image, seed) across all schedules.
-// Forward frames are NOT fetched — forward noising is computed in-browser
-// every slider tick for smooth transitions. The Python script still writes
-// forward_*.png alongside denoise_*.png, but the frontend ignores them.
-async function preloadFrames(imageId, seed) {
+// Eagerly load denoise PNGs for this (image, seed, strength) across all
+// schedules. Forward frames are NOT fetched — forward is in-browser.
+async function preloadFrames(imageId, seed, strength) {
   if (!manifest) return;
-  const dnTs = denoiseTimesteps();
+  const tag = strengthTag(strength);
+  const dnTs = denoiseTimestepsFor(strength);
   for (const sched of manifest.schedules) {
-    const key = imageId + ":" + seed + ":" + sched;
+    const key = imageId + ":" + seed + ":" + sched + ":" + tag;
     if (frameCache[key]) continue;
-    const dnReqs = dnTs.map((t, i) => loadImg(frameUrl(imageId, sched, seed, "denoise", i, t)));
+    const dnReqs = dnTs.map((t, i) => loadImg(frameUrl(imageId, sched, seed, "denoise", i, t, tag)));
     const dnImgs = await Promise.all(dnReqs);
     const denoise = dnImgs.map((img, i) => ({ t: dnTs[i], img }));
     frameCache[key] = { denoise };
   }
+}
+
+function activeFrameKey(sched) {
+  return activeImageId + ":" + currentSeed + ":" + sched + ":" + strengthTag(activeStrength);
 }
 
 // ─── Denoise strip render ───────────────────────────────────────────────────
@@ -1246,20 +1556,175 @@ function renderDenoiseStrip(scheduleName, frames) {
 function renderAllDenoising() {
   if (!manifest) return;
   for (const sched of manifest.schedules) {
-    const key = activeImageId + ":" + currentSeed + ":" + sched;
-    const cached = frameCache[key];
+    const cached = frameCache[activeFrameKey(sched)];
     renderDenoiseStrip(sched, cached ? cached.denoise : []);
+  }
+  refreshStrengthReadout();
+  renderMetrics();
+}
+
+function refreshStrengthReadout() {
+  if (strengthValEl) strengthValEl.textContent = activeStrength.toFixed(2);
+  if (tstarValEl)    tstarValEl.textContent    = currentTStar();
+}
+
+// ─── Takeaway text — updates with the timestep slider ───────────────────────
+const TAKEAWAY_BUCKETS = [
+  { max:  100, text: "Tiny noise added — all schedules look near-identical to the source. Differences between curves are imperceptible at low t." },
+  { max:  350, text: "All schedules still retain visible structure, but <strong class=\"linear-text\">linear</strong> has already reduced signal more aggressively than <strong class=\"cosine-text\">cosine</strong> or <strong class=\"exponential-text\">exponential</strong>." },
+  { max:  750, text: "<strong class=\"cosine-text\">Cosine</strong> keeps smoother degradation; <strong class=\"exponential-text\">exponential</strong> still preserves more structure but is close to its late-collapse cliff. <strong class=\"linear-text\">Linear</strong> is well into noise-dominated territory." },
+  { max: 1001, text: "<strong class=\"exponential-text\">Exponential</strong> rapidly loses structure here; the model now receives a much harder denoising input — note how recovery quality drops at higher strengths." },
+];
+
+function updateTakeaway() {
+  if (!takeawayTEl || !takeawayTextEl) return;
+  takeawayTEl.textContent = "t = " + currentT;
+  for (const bucket of TAKEAWAY_BUCKETS) {
+    if (currentT < bucket.max) {
+      takeawayTextEl.innerHTML = bucket.text;
+      return;
+    }
   }
 }
 
-// ─── Selection + seed cycle (both async — load frames before rendering) ─────
+// ─── Final-quality metrics: MSE / PSNR / SSIM (single-window) ──────────────
+function imgToImageData(img) {
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth || img.width;
+  c.height = img.naturalHeight || img.height;
+  c.getContext("2d").drawImage(img, 0, 0);
+  return c.getContext("2d").getImageData(0, 0, c.width, c.height);
+}
+
+// Resample arbitrary ImageData to (w, h) via canvas with high-quality smoothing.
+function resampleImageData(srcData, w, h) {
+  if (srcData.width === w && srcData.height === h) return srcData;
+  const c1 = document.createElement("canvas");
+  c1.width = srcData.width; c1.height = srcData.height;
+  c1.getContext("2d").putImageData(srcData, 0, 0);
+  const c2 = document.createElement("canvas");
+  c2.width = w; c2.height = h;
+  const ctx = c2.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(c1, 0, 0, w, h);
+  return ctx.getImageData(0, 0, w, h);
+}
+
+function computeMSE(a, b) {
+  const N = a.width * a.height;
+  let sum = 0;
+  for (let i = 0; i < N; i++) {
+    const i4 = i * 4;
+    for (let c = 0; c < 3; c++) {
+      const d = a.data[i4 + c] - b.data[i4 + c];
+      sum += d * d;
+    }
+  }
+  return sum / (N * 3);
+}
+
+function computePSNR(mseVal) {
+  if (mseVal <= 1e-10) return Infinity;
+  return 20 * Math.log10(255 / Math.sqrt(mseVal));
+}
+
+// Single-window SSIM over the whole image (Wang et al. 2004), per-pixel mean
+// of the three RGB channels' luminance proxy. Quick to compute, good enough
+// as a relative score for a visualizer.
+function computeSSIM(a, b) {
+  const N = a.width * a.height;
+  const len = N * 3;
+  let muX = 0, muY = 0;
+  for (let i = 0; i < N; i++) {
+    const i4 = i * 4;
+    muX += a.data[i4] + a.data[i4 + 1] + a.data[i4 + 2];
+    muY += b.data[i4] + b.data[i4 + 1] + b.data[i4 + 2];
+  }
+  muX /= len; muY /= len;
+  let varX = 0, varY = 0, covXY = 0;
+  for (let i = 0; i < N; i++) {
+    const i4 = i * 4;
+    for (let c = 0; c < 3; c++) {
+      const dx = a.data[i4 + c] - muX;
+      const dy = b.data[i4 + c] - muY;
+      varX += dx * dx; varY += dy * dy; covXY += dx * dy;
+    }
+  }
+  varX /= (len - 1); varY /= (len - 1); covXY /= (len - 1);
+  const C1 = (0.01 * 255) ** 2;
+  const C2 = (0.03 * 255) ** 2;
+  return ((2 * muX * muY + C1) * (2 * covXY + C2)) /
+         ((muX * muX + muY * muY + C1) * (varX + varY + C2));
+}
+
+function metricsFor(sched) {
+  const key = activeFrameKey(sched);
+  if (metricCache[key]) return metricCache[key];
+  const cached = frameCache[key];
+  const src = sourceImageDataCache[activeImageId];
+  if (!cached || !src) return null;
+  const last = cached.denoise[cached.denoise.length - 1];
+  if (!last) return null;
+  const recImg = imgToImageData(last.img);
+  const recRes = resampleImageData(recImg, src.width, src.height);
+  const mse = computeMSE(src, recRes);
+  const m = { mse, psnr: computePSNR(mse), ssim: computeSSIM(src, recRes) };
+  metricCache[key] = m;
+  return m;
+}
+
+function renderMetrics() {
+  if (!metricGridEl || !manifest) return;
+  const all = {};
+  let havAny = false;
+  for (const sched of manifest.schedules) {
+    const m = metricsFor(sched);
+    all[sched] = m;
+    if (m) havAny = true;
+  }
+  // Find best per metric (low MSE wins, high PSNR/SSIM wins).
+  const valid = Object.entries(all).filter(([_, m]) => m);
+  const best = { mse: null, psnr: null, ssim: null };
+  const worst = { mse: null, psnr: null, ssim: null };
+  if (valid.length) {
+    best.mse  = valid.reduce((a, b) => a[1].mse  < b[1].mse  ? a : b)[0];
+    best.psnr = valid.reduce((a, b) => a[1].psnr > b[1].psnr ? a : b)[0];
+    best.ssim = valid.reduce((a, b) => a[1].ssim > b[1].ssim ? a : b)[0];
+    worst.mse  = valid.reduce((a, b) => a[1].mse  > b[1].mse  ? a : b)[0];
+    worst.psnr = valid.reduce((a, b) => a[1].psnr < b[1].psnr ? a : b)[0];
+    worst.ssim = valid.reduce((a, b) => a[1].ssim < b[1].ssim ? a : b)[0];
+  }
+  for (const card of metricGridEl.querySelectorAll(".metric-card")) {
+    const sched = card.dataset.schedule;
+    const m = all[sched];
+    for (const cell of card.querySelectorAll(".metric-row .value")) {
+      const metric = cell.dataset.metric;
+      cell.classList.remove("best", "worst");
+      if (!m) { cell.textContent = "—"; continue; }
+      const v = m[metric];
+      if (metric === "mse")       cell.textContent = v.toFixed(1);
+      else if (metric === "psnr") cell.textContent = v.toFixed(2) + " dB";
+      else                        cell.textContent = v.toFixed(4);
+      if (valid.length > 1) {
+        if (best[metric]  === sched) cell.classList.add("best");
+        if (worst[metric] === sched) cell.classList.add("worst");
+      }
+    }
+  }
+}
+
+// ─── Selection + seed cycle + strength change (all async) ───────────────────
 async function selectImage(id) {
   if (!manifest || !manifest.images.includes(id)) return;
   activeImageId = id;
   if (imageSelectEl && imageSelectEl.value !== id) imageSelectEl.value = id;
   setCacheStatus(id + " · seed " + currentSeed + " · loading…", "loading");
   try {
-    await Promise.all([preloadFrames(id, currentSeed), loadSourceImageData(id)]);
+    await Promise.all([
+      preloadFrames(id, currentSeed, activeStrength),
+      loadSourceImageData(id),
+    ]);
     setCacheStatus(id + " · seed " + currentSeed + " · " + img2imgTag() + "ready", "ready");
   } catch (e) {
     setCacheStatus("error: " + e.message, "loading");
@@ -1275,7 +1740,7 @@ async function cycleSeed() {
   refreshSeedDisplay();
   setCacheStatus(activeImageId + " · seed " + currentSeed + " · loading…", "loading");
   try {
-    await preloadFrames(activeImageId, currentSeed);
+    await preloadFrames(activeImageId, currentSeed, activeStrength);
     setCacheStatus(activeImageId + " · seed " + currentSeed + " · " + img2imgTag() + "ready", "ready");
   } catch (e) {
     setCacheStatus("error: " + e.message, "loading");
@@ -1285,9 +1750,54 @@ async function cycleSeed() {
   renderAllDenoising();
 }
 
+async function setStrength(idx) {
+  if (!manifest || !Array.isArray(manifest.strengths)) return;
+  strengthIdx = Math.max(0, Math.min(manifest.strengths.length - 1, idx));
+  activeStrength = manifest.strengths[strengthIdx];
+  if (strengthSlider) strengthSlider.value = strengthIdx;
+  refreshStrengthReadout();
+  setCacheStatus(activeImageId + " · seed " + currentSeed + " · loading strength " + activeStrength.toFixed(2) + "…", "loading");
+  try {
+    await preloadFrames(activeImageId, currentSeed, activeStrength);
+    setCacheStatus(activeImageId + " · seed " + currentSeed + " · " + img2imgTag() + "ready", "ready");
+  } catch (e) {
+    setCacheStatus("error: " + e.message, "loading");
+    console.error(e);
+  }
+  renderAllDenoising();
+}
+
 imageSelectEl.addEventListener("change", (e) => selectImage(e.target.value));
 
 tSlider.addEventListener("input", () => setT(parseInt(tSlider.value, 10)));
+
+if (strengthSlider) {
+  strengthSlider.addEventListener("input", () => {
+    setStrength(parseInt(strengthSlider.value, 10));
+  });
+}
+
+if (overviewTabsEl) {
+  overviewTabsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".overview-tab");
+    if (!btn) return;
+    setOverviewView(btn.dataset.view);
+  });
+}
+
+function setOverviewView(view) {
+  if (!OVERVIEW_VIEWS[view]) return;
+  overviewView = view;
+  if (overviewTabsEl) {
+    for (const b of overviewTabsEl.querySelectorAll(".overview-tab")) {
+      b.classList.toggle("active", b.dataset.view === view);
+    }
+  }
+  const cfg = OVERVIEW_VIEWS[view];
+  if (overviewTitleEl)    overviewTitleEl.innerHTML    = cfg.title;
+  if (overviewSubtitleEl) overviewSubtitleEl.innerHTML = cfg.subtitle;
+  drawOverviewChart();
+}
 
 function play() {
   playing = true;
@@ -1344,6 +1854,24 @@ async function init() {
   regenNoiseBtn.disabled = false;
   activeImageId = manifest.images[0];
   imageSelectEl.value = activeImageId;
+
+  // Configure the strength slider from manifest. Fallback for legacy manifests
+  // (which had a single `strength` field) keeps the slider disabled.
+  const strengths = Array.isArray(manifest.strengths) ? manifest.strengths : null;
+  if (strengths && strengths.length && strengthSlider) {
+    strengthIdx = Math.min(strengths.length - 1, Math.max(0,
+      Math.round((strengths.length - 1) / 2)));    // start near the middle
+    activeStrength = strengths[strengthIdx];
+    strengthSlider.min  = 0;
+    strengthSlider.max  = strengths.length - 1;
+    strengthSlider.step = 1;
+    strengthSlider.value = strengthIdx;
+    strengthSlider.disabled = false;
+  } else if (manifest.strength != null) {
+    activeStrength = manifest.strength;
+  }
+  refreshStrengthReadout();
+
   await selectImage(activeImageId);
 }
 

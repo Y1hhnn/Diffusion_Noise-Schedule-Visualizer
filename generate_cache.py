@@ -18,7 +18,7 @@ For every (image, schedule, seed) triple this:
   7. Writes 8 forward snapshots over [0, T] and 8 denoise snapshots over
      [0, t_start] into results/<img>/<schedule>_schedule_frames/seed_<n>/.
 
-Default model: google/ddpm-celebahq-256 (256×256 unconditional CelebA-HQ).
+Default model: google/ddpm-cat-256 (256×256 unconditional Cat).
 Sampling: η=0 deterministic DDIM, 100 steps, strength=0.6.
 For lighter / faster runs swap in google/ddpm-cifar10-32 (32×32) via --model.
 
@@ -76,12 +76,10 @@ DENOISE_FRAMES = 8
 DEFAULT_NUM_STEPS = 100     # evenly-spaced sample transitions in the denoise range
 DEFAULT_ETA = 0.0           # 0.0 = deterministic DDIM (cleaner output);
                             # 1.0 = DDPM marginals (more variety, more noise)
-DEFAULT_STRENGTH = 0.6      # SDEdit-style img2img strength ∈ (0, 1].
-                            # forward stops at t_start = round(strength · T);
-                            # reverse runs from t_start → 0 (NOT T → 0), so the
-                            # denoised image preserves the source's structure.
-                            # 0.3 ≈ subtle clean-up, 0.7 ≈ heavy stylization,
-                            # 1.0 ≈ full unconditional generation.
+DEFAULT_STRENGTHS = [0.3, 0.5, 0.7, 0.9]  # SDEdit img2img strengths to render.
+                            # Frontend slider snaps to one of these. Each
+                            # strength produces an independent reverse trajectory
+                            # — small=subtle clean-up, large=heavy stylization.
 
 
 # ─── Schedules ───────────────────────────────────────────────────────────────
@@ -171,6 +169,12 @@ def compute_denoise_frame_ts(num_steps: int, t_start: int) -> List[int]:
     return [times[i] for i in idx]
 
 
+def strength_tag(strength: float) -> str:
+    """Strength → 's030', 's050', 's070', etc. Used as a directory-name
+    component so each strength's denoise frames live in their own folder."""
+    return "s" + str(int(round(strength * 100))).zfill(3)
+
+
 def run_unified(
     model,
     aBar: np.ndarray,
@@ -179,7 +183,7 @@ def run_unified(
     device: torch.device,
     num_steps: int = DEFAULT_NUM_STEPS,
     eta: float = DEFAULT_ETA,
-    strength: float = DEFAULT_STRENGTH,
+    strength: float = 0.6,
 ) -> Tuple[List[Tuple[int, torch.Tensor]], List[Tuple[int, torch.Tensor]]]:
     """
     Unified forward + image-to-image (SDEdit) reverse pipeline.
@@ -300,7 +304,7 @@ def main() -> int:
                         help="root output directory (default: results/)")
     parser.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2, 3, 4],
                         help="list of seeds (default: 0 1 2 3 4)")
-    parser.add_argument("--model", default="google/ddpm-celebahq-256",
+    parser.add_argument("--model", default="google/ddpm-cat-256",
                         help="HuggingFace UNet2DModel checkpoint. Defaults to a 256×256 "
                              "checkpoint for high-quality output. For a lighter/faster run "
                              "use google/ddpm-cifar10-32 (32×32, ~30MB) or any 256×256 "
@@ -315,12 +319,11 @@ def main() -> int:
     parser.add_argument("--eta", type=float, default=DEFAULT_ETA,
                         help=f"DDIM stochasticity (default {DEFAULT_ETA}). 0=deterministic "
                              "(cleanest), 1=DDPM marginals (more variety, more residual noise).")
-    parser.add_argument("--strength", type=float, default=DEFAULT_STRENGTH,
-                        help=f"SDEdit img2img strength ∈ (0, 1] (default {DEFAULT_STRENGTH}). "
-                             "Forward stops at t_start = round(strength · T) and reverse runs "
-                             "from there → 0, so the denoised output preserves the source's "
-                             "structure. 0.3 ≈ subtle clean-up; 0.7 ≈ heavy stylization; "
-                             "1.0 ≈ unconditional generation from pure noise.")
+    parser.add_argument("--strengths", type=float, nargs="+", default=DEFAULT_STRENGTHS,
+                        help=f"SDEdit img2img strengths to render (default {DEFAULT_STRENGTHS}). "
+                             "Each value gets its own reverse trajectory; the frontend slider "
+                             "snaps between them. Smaller=subtle clean-up; larger=heavier "
+                             "stylization; 1.0=unconditional generation from pure noise.")
     parser.add_argument("--device", default=None, help="cuda / mps / cpu (default: auto)")
     parser.add_argument("--schedules", nargs="+", default=list(SCHEDULES.keys()),
                         help="subset of schedules to render")
@@ -356,11 +359,23 @@ def main() -> int:
     if not schedules_to_run:
         sys.exit(f"error: no valid schedules in {args.schedules}; choose from {list(SCHEDULES)}")
 
+    strengths = [s for s in args.strengths if 0.0 < s <= 1.0]
+    if not strengths:
+        sys.exit(f"error: no valid strengths in {args.strengths}; need values ∈ (0, 1]")
+    strengths = sorted(set(round(s, 3) for s in strengths))
+
     results_dir.mkdir(parents=True, exist_ok=True)
+    target_size = args.frame_size if args.frame_size > 0 else model_size
 
     image_ids: List[str] = []
-    pbar = tqdm(total=len(image_paths) * len(schedules_to_run) * len(args.seeds),
-                desc="trajectories", unit="traj")
+    pbar = tqdm(
+        total=len(image_paths) * len(schedules_to_run) * len(args.seeds) * len(strengths),
+        desc="trajectories", unit="traj",
+    )
+    # forward frames written once per (image, schedule, seed) — they don't
+    # depend on strength (forward is always closed-form x_t over [0, T]).
+    forward_done: set = set()
+
     for img_path in image_paths:
         img_id = img_path.stem
         image_ids.append(img_id)
@@ -372,28 +387,41 @@ def main() -> int:
             sched_dir.mkdir(parents=True, exist_ok=True)
 
             for seed in args.seeds:
-                fwd_snaps, dn_snaps = run_unified(
-                    model, aBar, x0,
-                    seed=seed, device=device,
-                    num_steps=args.num_steps, eta=args.eta, strength=args.strength,
-                )
                 seed_dir = sched_dir / f"seed_{seed}"
                 seed_dir.mkdir(exist_ok=True)
-                # frame-size = 0 means "keep model native resolution"
-                target_size = args.frame_size if args.frame_size > 0 else model_size
-                for i, (t, x_t) in enumerate(fwd_snaps):
-                    tensor_to_image(x_t, target_size).save(
-                        seed_dir / f"forward_{i}_t{t:04d}.png"
+
+                for strength in strengths:
+                    fwd_snaps, dn_snaps = run_unified(
+                        model, aBar, x0,
+                        seed=seed, device=device,
+                        num_steps=args.num_steps, eta=args.eta, strength=strength,
                     )
-                for i, (t, x_t) in enumerate(dn_snaps):
-                    tensor_to_image(x_t, target_size).save(
-                        seed_dir / f"denoise_{i}_t{t:04d}.png"
-                    )
-                pbar.update(1)
+                    fwd_key = (img_id, sched_name, seed)
+                    if fwd_key not in forward_done:
+                        for i, (t, x_t) in enumerate(fwd_snaps):
+                            tensor_to_image(x_t, target_size).save(
+                                seed_dir / f"forward_{i}_t{t:04d}.png"
+                            )
+                        forward_done.add(fwd_key)
+
+                    s_dir = seed_dir / strength_tag(strength)
+                    s_dir.mkdir(exist_ok=True)
+                    for i, (t, x_t) in enumerate(dn_snaps):
+                        tensor_to_image(x_t, target_size).save(
+                            s_dir / f"denoise_{i}_t{t:04d}.png"
+                        )
+                    pbar.update(1)
     pbar.close()
 
-    target_size = args.frame_size if args.frame_size > 0 else model_size
-    t_start = max(1, min(T, int(round(args.strength * T))))
+    denoise_ts_per_strength = {}
+    t_start_per_strength = {}
+    for strength in strengths:
+        t_start = max(1, min(T, int(round(strength * T))))
+        t_start_per_strength[strength_tag(strength)] = t_start
+        denoise_ts_per_strength[strength_tag(strength)] = compute_denoise_frame_ts(
+            args.num_steps, t_start
+        )
+
     manifest = {
         "model": args.model,
         "model_native_size": model_size,
@@ -401,22 +429,23 @@ def main() -> int:
         "T": T,
         "num_steps": args.num_steps,
         "eta": args.eta,
-        "strength": args.strength,
-        "t_start": t_start,
+        "strengths": strengths,
+        "strength_tags": {strength_tag(s): s for s in strengths},
+        "t_start_per_strength": t_start_per_strength,
         "frames_per_trajectory": DENOISE_FRAMES,
         "forward_timesteps": compute_forward_frame_ts(),
-        "denoise_timesteps": compute_denoise_frame_ts(args.num_steps, t_start),
+        "denoise_timesteps_per_strength": denoise_ts_per_strength,
         "forward_filename": "forward_{i}_t{t:04d}.png",
-        "denoise_filename": "denoise_{i}_t{t:04d}.png",
+        "denoise_filename": "{strength_tag}/denoise_{i}_t{t:04d}.png",
         "seeds": list(args.seeds),
         "schedules": schedules_to_run,
         "images": image_ids,
         "pipeline": (
-            f"shared ε per (image, schedule, seed): "
-            f"forward x_t = √ᾱ_t·x_0 + √(1-ᾱ_t)·ε for t ∈ [0, T] (display); "
-            f"reverse (img2img) starts from x_{{{t_start}}} and runs "
-            f"η={args.eta} DDIM, {args.num_steps} steps → 0; "
-            f"strength={args.strength}"
+            f"shared ε per (image, schedule, seed) across all strengths; "
+            f"forward x_t closed-form for t ∈ [0, T]; "
+            f"reverse (img2img) starts from x_{{round(s · T)}} for each "
+            f"s ∈ {strengths} and runs η={args.eta} DDIM, "
+            f"{args.num_steps} steps → 0"
         ),
     }
     manifest_path = results_dir / "manifest.json"
