@@ -603,10 +603,7 @@ canvas.overview-canvas {
       <p class="denoise-explain">
         Reverse starts from the partially-noised source image <code>x<sub>t*</sub></code> at
         <code>t* = strength · T</code> (not from pure Gaussian noise) and η-DDIM-samples down
-        to <code>x<sub>0</sub></code> using a real pretrained denoiser. Because reverse begins
-        from a noised version of <em>your</em> image rather than a fresh sample, the output
-        preserves the source's structure rather than hallucinating a face from the model's
-        training distribution.
+        to <code>x<sub>0</sub></code> using a real pretrained denoiser.
       </p>
     </div>
     <div class="denoise-row" data-schedule="linear">
