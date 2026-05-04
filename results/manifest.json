@@ -1,12 +1,223 @@
 {
-  "model": "google/ddpm-celebahq-256",
+  "model": "google/ddpm-cat-256",
   "model_native_size": 256,
   "frame_size": 256,
   "T": 1000,
   "num_steps": 100,
   "eta": 0.0,
-  "strength": 0.6,
-  "t_start": 600,
+  "strengths": [
+    0.3,
+    0.5,
+    0.7,
+    0.9
+  ],
+  "strength_tags": {
+    "s030": 0.3,
+    "s050": 0.5,
+    "s070": 0.7,
+    "s090": 0.9
+  },
+  "t_start_per_strength": {
+    "s030": 300,
+    "s050": 500,
+    "s070": 700,
+    "s090": 900
+  },
+  "target_alphas": [
+    0.8,
+    0.6,
+    0.4,
+    0.2,
+    0.1
+  ],
+  "alpha_tags": {
+    "a080": 0.8,
+    "a060": 0.6,
+    "a040": 0.4,
+    "a020": 0.2,
+    "a010": 0.1
+  },
+  "t_start_per_alpha_per_schedule": {
+    "linear": {
+      "a080": 145,
+      "a060": 222,
+      "a040": 299,
+      "a020": 397,
+      "a010": 476
+    },
+    "cosine": {
+      "a080": 290,
+      "a060": 431,
+      "a040": 561,
+      "a020": 702,
+      "a010": 794
+    },
+    "exponential": {
+      "a080": 369,
+      "a060": 454,
+      "a040": 526,
+      "a020": 605,
+      "a010": 662
+    }
+  },
+  "denoise_timesteps_per_alpha_per_schedule": {
+    "linear": {
+      "a080": [
+        145,
+        125,
+        103,
+        83,
+        62,
+        42,
+        20,
+        0
+      ],
+      "a060": [
+        222,
+        191,
+        158,
+        127,
+        95,
+        64,
+        31,
+        0
+      ],
+      "a040": [
+        299,
+        257,
+        212,
+        170,
+        129,
+        87,
+        42,
+        0
+      ],
+      "a020": [
+        397,
+        341,
+        282,
+        226,
+        171,
+        115,
+        56,
+        0
+      ],
+      "a010": [
+        476,
+        409,
+        338,
+        271,
+        205,
+        138,
+        67,
+        0
+      ]
+    },
+    "cosine": {
+      "a080": [
+        290,
+        249,
+        206,
+        165,
+        125,
+        84,
+        41,
+        0
+      ],
+      "a060": [
+        431,
+        371,
+        306,
+        246,
+        185,
+        125,
+        60,
+        0
+      ],
+      "a040": [
+        561,
+        482,
+        398,
+        320,
+        241,
+        163,
+        79,
+        0
+      ],
+      "a020": [
+        702,
+        604,
+        498,
+        400,
+        302,
+        204,
+        98,
+        0
+      ],
+      "a010": [
+        794,
+        683,
+        564,
+        453,
+        341,
+        230,
+        111,
+        0
+      ]
+    },
+    "exponential": {
+      "a080": [
+        369,
+        317,
+        262,
+        210,
+        159,
+        107,
+        52,
+        0
+      ],
+      "a060": [
+        454,
+        390,
+        322,
+        259,
+        195,
+        132,
+        64,
+        0
+      ],
+      "a040": [
+        526,
+        452,
+        373,
+        300,
+        226,
+        153,
+        74,
+        0
+      ],
+      "a020": [
+        605,
+        520,
+        430,
+        345,
+        260,
+        175,
+        85,
+        0
+      ],
+      "a010": [
+        662,
+        569,
+        470,
+        377,
+        285,
+        192,
+        93,
+        0
+      ]
+    }
+  },
   "frames_per_trajectory": 8,
   "forward_timesteps": [
     1000,
@@ -18,18 +229,51 @@
     143,
     0
   ],
-  "denoise_timesteps": [
-    600,
-    516,
-    426,
-    342,
-    258,
-    174,
-    84,
-    0
-  ],
+  "denoise_timesteps_per_strength": {
+    "s030": [
+      300,
+      258,
+      213,
+      171,
+      129,
+      87,
+      42,
+      0
+    ],
+    "s050": [
+      500,
+      430,
+      355,
+      285,
+      215,
+      145,
+      70,
+      0
+    ],
+    "s070": [
+      700,
+      602,
+      497,
+      399,
+      301,
+      203,
+      98,
+      0
+    ],
+    "s090": [
+      900,
+      774,
+      639,
+      513,
+      387,
+      261,
+      126,
+      0
+    ]
+  },
   "forward_filename": "forward_{i}_t{t:04d}.png",
-  "denoise_filename": "denoise_{i}_t{t:04d}.png",
+  "denoise_filename_strength": "{strength_tag}/denoise_{i}_t{t:04d}.png",
+  "denoise_filename_alpha": "{alpha_tag}/denoise_{i}_t{t:04d}.png",
   "seeds": [
     0,
     1,
@@ -43,8 +287,7 @@
     "exponential"
   ],
   "images": [
-    "fig1",
-    "fig2"
+    "cake"
   ],
-  "pipeline": "shared \u03b5 per (image, schedule, seed): forward x_t = \u221a\u1fb1_t\u00b7x_0 + \u221a(1-\u1fb1_t)\u00b7\u03b5 for t \u2208 [0, T] (display); reverse (img2img) starts from x_{600} and runs \u03b7=0.0 DDIM, 100 steps \u2192 0; strength=0.6"
+  "pipeline": "shared \u03b5 per (image, schedule, seed) across all strengths; forward x_t closed-form for t \u2208 [0, T]; reverse (img2img) starts from x_{round(s \u00b7 T)} for each s \u2208 [0.3, 0.5, 0.7, 0.9] and runs \u03b7=0.0 DDIM, 100 steps \u2192 0"
 }

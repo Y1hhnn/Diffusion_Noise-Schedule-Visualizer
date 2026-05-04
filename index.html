@@ -29,12 +29,62 @@ html, body {
   font-size: 15px;
 }
 
-body { padding: 28px 20px 60px; min-height: 100vh; }
+body { padding: 0; min-height: 100vh; }
 
-.container { max-width: 1200px; margin: 0 auto; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
 
-header { text-align: center; margin-bottom: 26px; }
+/* ─── Sticky header (title + Compare-mode toggle) ───────────────────── */
+header.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(15, 17, 23, 0.92);
+  backdrop-filter: saturate(180%) blur(10px);
+  -webkit-backdrop-filter: saturate(180%) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
 
+.sticky-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 20px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.sticky-inner h1 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  margin: 0;
+  text-align: center;
+}
+
+/* Phase indicator: own row, hidden on initial load, slides in once the
+   user has scrolled past the page subtitle (body gets .scrolled-past-subtitle). */
+.phase-indicator {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-align: center;
+  color: var(--text-dim);
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity 0.22s ease, max-height 0.22s ease;
+  width: 100%;
+}
+.phase-indicator[data-phase="forward"]  { color: var(--accent); }
+.phase-indicator[data-phase="denoise"]  { color: var(--cosine); }
+body.scrolled-past-subtitle .phase-indicator:not(:empty) {
+  max-height: 32px;
+  opacity: 1;
+}
+
+/* keep the larger H1 styling for places that still use plain <h1> (none now,
+   but harmless if added later) */
 h1 {
   font-size: 28px;
   font-weight: 600;
@@ -42,20 +92,67 @@ h1 {
   margin-bottom: 4px;
 }
 
+/* ─── Phase sections (Forward / Denoising) ──────────────────────────── */
+.phase {
+  margin-top: 24px;
+}
+.phase + .phase { margin-top: 36px; }
+
+/* In-page phase heading — matches the sticky header's .phase-indicator
+   visual style (centered, 18px / 600, color-coded). */
+.phase-heading {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-align: center;
+  color: var(--text-dim);
+  margin: 0 0 16px;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+.phase-heading[data-phase="forward"]  { color: var(--accent); }
+.phase-heading[data-phase="denoise"]  { color: var(--cosine); }
+
+/* Key Insight paragraph (used inline inside each phase, not in a footer) */
+.key-insight {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-top: 18px;
+}
+.key-insight h4 {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.key-insight p {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.key-insight p strong { color: var(--text); font-weight: 500; }
+
 .subtitle {
-  color: var(--text-muted);
-  font-size: 14px;
-  margin-bottom: 18px;
+  color: var(--text-dim);
+  font-size: 17px;
+  line-height: 1.55;
+  margin: 4px auto 24px;
+  max-width: 820px;
+  text-align: center;
 }
 
 .formula-box {
-  display: inline-block;
+  display: block;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 14px 22px;
-  max-width: 760px;
-  text-align: left;
+  padding: 16px 18px 12px;
+  margin-bottom: 22px;
 }
 
 .formula {
@@ -75,10 +172,11 @@ h1 {
   padding: 16px 18px;
   margin-bottom: 22px;
   display: flex;
-  gap: 18px;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 14px;
 }
+.controls > .image-controls,
+.controls > .time-controls { width: 100%; }
 
 .image-controls {
   display: flex;
@@ -149,12 +247,20 @@ button.primary {
 button.primary:hover { background: #6f7af0; border-color: #6f7af0; }
 
 .time-controls {
-  flex: 1;
-  min-width: 320px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+
+/* Global controls (image picker + regen-noise + seed + cache status) live
+   above the Forward phase since they apply to BOTH Forward and Denoising. */
+.global-controls {
+  border-color: var(--accent);
+  border-style: dashed;
+  border-width: 1px;
+  margin-bottom: 28px;
+}
+.global-controls .image-controls { justify-content: center; }
 
 .slider-row { display: flex; align-items: center; gap: 12px; }
 
@@ -211,8 +317,6 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 22px;
 }
 
-@media (max-width: 920px) { .schedule-grid { grid-template-columns: 1fr; } }
-
 .panel {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -263,6 +367,21 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+
+/* Panel metrics + footer text swap with the active compare mode. */
+.metric-alphabar,
+.insight-alphabar       { display: none; }
+.compare-alphabar .metric-timestep,
+.compare-alphabar .insight-timestep   { display: none; }
+.compare-alphabar .metric-alphabar    { display: inline; }
+.compare-alphabar .insight-alphabar   { display: block; }
+
+.matched-t-val { color: var(--text); font-weight: 500; }
+
+/* Slider-aux deprecated: per-panel "matched t" already shows the same info,
+   so the line under the slider was redundant. Keep the rule that always
+   hides it in case the markup is left in for a while. */
+.slider-aux { display: none !important; }
 
 canvas.noisy-canvas {
   display: block;
@@ -538,6 +657,53 @@ canvas.overview-canvas {
   .denoise-row-label { flex: 0 0 auto; }
 }
 
+/* ─── Compare-mode toggle (lives at the top of .time-controls) ──────── */
+.compare-toggle {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.compare-toggle .control-label {
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.compare-buttons {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+.compare-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.compare-btn:hover { color: var(--text); background: rgba(129, 140, 248, 0.08); }
+.compare-btn.active {
+  background: var(--accent);
+  color: #0f1117;
+  box-shadow: 0 1px 6px rgba(129, 140, 248, 0.4);
+}
+.compare-btn.active:hover { background: var(--accent); }
+.compare-btn sub { font-size: 0.78em; }
+
 /* ─── Strength slider (denoise section) ─────────────────────────────── */
 .strength-control {
   display: flex;
@@ -662,20 +828,61 @@ canvas.overview-canvas {
 .metric-row .value.best { color: var(--cosine); font-weight: 600; }
 .metric-row .value.worst { color: var(--exponential); }
 
+/* "★ best overall" badge on the schedule card that wins the most metrics. */
+.metric-card.overall-best {
+  border-color: rgba(129, 140, 248, 0.55);
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.35), 0 4px 14px -8px rgba(129, 140, 248, 0.5);
+  background: linear-gradient(180deg, var(--bg-soft) 0%, rgba(129, 140, 248, 0.05) 100%);
+}
+.metric-card.overall-best::after {
+  content: "★ best overall";
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 </style>
+<!-- MathJax: TeX-rendered math throughout the page. Inline = \( … \),
+     display = \[ … \]. tex-svg is the SVG renderer (sharper than CHTML
+     and copy-paste-friendly). -->
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)']],
+      displayMath: [['\\[', '\\]']],
+      processEscapes: true,
+    },
+    svg: { fontCache: 'global' },
+    options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'] },
+  };
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 </head>
 <body>
-<div class="container">
-  <header>
-    <h1>Diffusion Noise Schedule Visualizer</h1>
-    <p class="subtitle">See how Linear, Cosine, and Exponential schedules corrupt the same image differently as t grows.</p>
-    <div class="formula-box">
-      <div class="formula">x<sub>t</sub> = √ᾱ<sub>t</sub> · x<sub>0</sub> + √(1 − ᾱ<sub>t</sub>) · ε</div>
-      <p class="formula-explain">Forward diffusion mixes the image x<sub>0</sub> with Gaussian noise ε ∼ 𝒩(0, I). Signal retention <b>ᾱ<sub>t</sub></b> drops from 1 → 0 as t grows; per-step noise level <b>β<sub>t</sub></b> defines how fast.</p>
-    </div>
-  </header>
 
-  <section class="controls">
+<header class="sticky-header">
+  <div class="sticky-inner">
+    <h1>Diffusion Noise Schedule Visualizer</h1>
+    <div class="phase-indicator" id="phase-indicator"></div>
+    <div class="compare-toggle">
+      <span class="control-label">Compare mode</span>
+      <div class="compare-buttons" id="compare-mode">
+        <button class="compare-btn active" data-mode="timestep">Same timestep \(t\)</button>
+        <button class="compare-btn"        data-mode="alphabar">Same signal retention \(\bar{\alpha}\)</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <p class="subtitle">See how Linear, Cosine, and Exponential schedules corrupt the same image differently as \(t\) grows — then how denoising recovers it.</p>
+
+  <section class="controls global-controls">
     <div class="image-controls">
       <label class="control-label" for="image-select">Image</label>
       <select id="image-select" class="image-select" disabled>
@@ -685,6 +892,17 @@ canvas.overview-canvas {
       <span class="seed-info">seed <span id="seed-val">—</span> / 4</span>
       <span class="cache-status loading" id="cache-status">cache: loading manifest…</span>
     </div>
+  </section>
+
+  <section class="phase phase-forward">
+    <div class="phase-heading" data-phase="forward">Forward · Noising</div>
+
+    <div class="formula-box">
+      <div class="formula">\[ x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1 - \bar{\alpha}_t}\, \varepsilon \]</div>
+      <p class="formula-explain">Forward diffusion mixes the image \(x_0\) with Gaussian noise \(\varepsilon \sim \mathcal{N}(0, I)\). Signal retention \(\bar{\alpha}_t\) drops from \(1 \to 0\) as \(t\) grows; per-step noise level \(\beta_t\) defines how fast.</p>
+    </div>
+
+  <section class="controls">
     <div class="time-controls">
       <div class="slider-row">
         <span class="t-label">Timestep:</span>
@@ -700,12 +918,12 @@ canvas.overview-canvas {
 
   <section class="overview-card">
     <div class="overview-header">
-      <h2 id="overview-title">Overview · Signal Retention (ᾱ<sub>t</sub>)</h2>
-      <p id="overview-subtitle">All three schedules at a glance: <span class="linear-text">Linear</span> drops fastest in the middle, <span class="cosine-text">Cosine</span> stays smoother throughout, <span class="exponential-text">Exponential</span> holds high signal early then collapses sharply near t=T.</p>
+      <h2 id="overview-title">Overview · Signal Retention \(\bar{\alpha}_t\)</h2>
+      <p id="overview-subtitle">All three schedules at a glance: <span class="linear-text">Linear</span> drops fastest in the middle, <span class="cosine-text">Cosine</span> stays smoother throughout, <span class="exponential-text">Exponential</span> holds high signal early then collapses sharply near \(t=T\).</p>
     </div>
     <div class="overview-tabs" id="overview-tabs">
-      <button class="overview-tab active" data-view="signal">Signal retention ᾱ<sub>t</sub></button>
-      <button class="overview-tab"        data-view="noise">Noise amount 1−ᾱ<sub>t</sub></button>
+      <button class="overview-tab active" data-view="signal">Signal retention \(\bar{\alpha}_t\)</button>
+      <button class="overview-tab"        data-view="noise">Noise amount \(1-\bar{\alpha}_t\)</button>
       <button class="overview-tab"        data-view="snr">SNR</button>
     </div>
     <canvas class="overview-canvas" id="overview-canvas"></canvas>
@@ -716,51 +934,54 @@ canvas.overview-canvas {
       <div class="panel-header">
         <h2>Linear</h2>
         <div class="panel-metrics">
-          <span>β<sub>t</sub>=<span class="beta-val">—</span></span>
-          <span>ᾱ<sub>t</sub>=<span class="alphabar-val">—</span></span>
+          <span class="metric-timestep">\(\beta_t\) = <span class="beta-val">—</span></span>
+          <span class="metric-timestep">\(\bar{\alpha}_t\) = <span class="alphabar-val">—</span></span>
+          <span class="metric-alphabar">matched \(t\) = <span class="matched-t-val">—</span></span>
         </div>
       </div>
       <canvas class="noisy-canvas" width="256" height="256"></canvas>
       <canvas class="curve-canvas"></canvas>
       <div class="final-preview">
         <canvas class="final-canvas" width="56" height="56"></canvas>
-        <div class="preview-info"><b>at t = T</b> · final corruption</div>
+        <div class="preview-info"><b>at \(t = T\)</b> · final corruption</div>
       </div>
-      <p class="panel-explain">β<sub>t</sub> grows linearly from β<sub>min</sub> to β<sub>max</sub>. From DDPM (Ho et al., 2020). Simple and steady, but the cumulative signal ᾱ<sub>t</sub> drops relatively fast through the middle of the schedule.</p>
+      <p class="panel-explain">\(\beta_t\) grows linearly from \(\beta_{\min}\) to \(\beta_{\max}\). From DDPM (Ho et al., 2020). Simple and steady, but the cumulative signal \(\bar{\alpha}_t\) drops relatively fast through the middle of the schedule.</p>
     </div>
 
     <div class="panel" data-schedule="cosine">
       <div class="panel-header">
         <h2>Cosine</h2>
         <div class="panel-metrics">
-          <span>β<sub>t</sub>=<span class="beta-val">—</span></span>
-          <span>ᾱ<sub>t</sub>=<span class="alphabar-val">—</span></span>
+          <span class="metric-timestep">\(\beta_t\) = <span class="beta-val">—</span></span>
+          <span class="metric-timestep">\(\bar{\alpha}_t\) = <span class="alphabar-val">—</span></span>
+          <span class="metric-alphabar">matched \(t\) = <span class="matched-t-val">—</span></span>
         </div>
       </div>
       <canvas class="noisy-canvas" width="256" height="256"></canvas>
       <canvas class="curve-canvas"></canvas>
       <div class="final-preview">
         <canvas class="final-canvas" width="56" height="56"></canvas>
-        <div class="preview-info"><b>at t = T</b> · final corruption</div>
+        <div class="preview-info"><b>at \(t = T\)</b> · final corruption</div>
       </div>
-      <p class="panel-explain">ᾱ<sub>t</sub> follows a smooth cosine curve. From Improved DDPM (Nichol & Dhariwal, 2021). It preserves visible structure longer at low and mid timesteps, then transitions smoothly toward noise.</p>
+      <p class="panel-explain">\(\bar{\alpha}_t\) follows a smooth cosine curve. From Improved DDPM (Nichol & Dhariwal, 2021). It preserves visible structure longer at low and mid timesteps, then transitions smoothly toward noise.</p>
     </div>
 
     <div class="panel" data-schedule="exponential">
       <div class="panel-header">
         <h2>Exponential</h2>
         <div class="panel-metrics">
-          <span>β<sub>t</sub>=<span class="beta-val">—</span></span>
-          <span>ᾱ<sub>t</sub>=<span class="alphabar-val">—</span></span>
+          <span class="metric-timestep">\(\beta_t\) = <span class="beta-val">—</span></span>
+          <span class="metric-timestep">\(\bar{\alpha}_t\) = <span class="alphabar-val">—</span></span>
+          <span class="metric-alphabar">matched \(t\) = <span class="matched-t-val">—</span></span>
         </div>
       </div>
       <canvas class="noisy-canvas" width="256" height="256"></canvas>
       <canvas class="curve-canvas"></canvas>
       <div class="final-preview">
         <canvas class="final-canvas" width="56" height="56"></canvas>
-        <div class="preview-info"><b>at t = T</b> · final corruption</div>
+        <div class="preview-info"><b>at \(t = T\)</b> · final corruption</div>
       </div>
-      <p class="panel-explain">This demo uses a custom exponential-style ᾱ<sub>t</sub> curve. Corruption stays gentle for most of the schedule, then accelerates sharply near t=T — a clear late-collapse contrast to linear and cosine.</p>
+      <p class="panel-explain">This demo uses a custom exponential-style \(\bar{\alpha}_t\) curve. Corruption stays gentle for most of the schedule, then accelerates sharply near \(t=T\) — a clear late-collapse contrast to linear and cosine.</p>
     </div>
   </section>
 
@@ -769,19 +990,35 @@ canvas.overview-canvas {
     <p id="takeaway-text">Drag the timestep slider to compare schedule effects across the noising trajectory.</p>
   </aside>
 
+  <div class="key-insight">
+    <h4>Key Insight · Forward</h4>
+    <p class="insight-timestep">At the <strong>same timestep \(t\)</strong>, each schedule retains a different amount of original signal. <span class="linear-text">Linear</span> steadily reduces signal under the classic DDPM-style \(\beta\) schedule. <span class="cosine-text">Cosine</span> preserves structure longer through a smoother curve. <span class="exponential-text">Exponential</span> is configured here as a late-collapse schedule: the image stays readable for longer, then rapidly becomes noise near the end. The schedule choice directly shapes what the model sees and learns at each timestep.</p>
+    <p class="insight-alphabar">At the <strong>same signal retention \(\bar{\alpha}\)</strong>, each schedule reaches that noise level at a <em>different</em> timestep. <span class="linear-text">Linear</span> is the first to hit any given \(\bar{\alpha}\) — its curve drops fastest mid-schedule. <span class="cosine-text">Cosine</span> arrives later and more gradually. <span class="exponential-text">Exponential</span> takes the longest to descend, then collapses sharply once it does. So even at <em>matched noise levels</em>, models trained under different schedules see fundamentally different \((x_t, t)\) pairs — schedule choice shapes the per-step training distribution, not just the marginals.</p>
+  </div>
+
+  </section><!-- /phase-forward -->
+
+  <section class="phase phase-denoise">
+    <div class="phase-heading" data-phase="denoise">Denoising · Image-to-Image Recovery</div>
+
+    <div class="formula-box">
+      <div class="formula">\[ x_{t-1} = \sqrt{\bar{\alpha}_{t-1}}\, \hat{x}_0 + \sqrt{1 - \bar{\alpha}_{t-1} - \sigma_t^2}\, \hat{\varepsilon} + \sigma_t\, z \]</div>
+      <p class="formula-explain">SDEdit-style reverse: start from the partially-noised \(x_{t^\star}\) and \(\eta\)-DDIM-sample down to \(x_0\). Each step uses the network's noise prediction \(\hat{\varepsilon} = \varepsilon_\theta(x_t, t)\), Tweedie's reconstruction \(\hat{x}_0 = (x_t - \sqrt{1-\bar{\alpha}_t}\,\hat{\varepsilon}) / \sqrt{\bar{\alpha}_t}\), and stochastic noise \(\sigma_t\, z\) with \(z \sim \mathcal{N}(0, I)\). \(\eta=0 \Rightarrow \sigma_t = 0\) (deterministic DDIM); \(\eta=1\) recovers DDPM marginals.</p>
+    </div>
+
   <section class="denoise-section">
     <div class="denoise-header">
       <h2>Denoising · Image-to-Image (SDEdit-style reverse)</h2>
       <p class="denoise-explain">
-        Reverse starts from the partially-noised source image <code>x<sub>t*</sub></code> at
-        <code>t* = strength · T</code> (not from pure Gaussian noise) and η-DDIM-samples down
-        to <code>x<sub>0</sub></code> using a real pretrained denoiser.
+        Reverse starts from the partially-noised source image \(x_{t^\star}\) at
+        \(t^\star = \mathrm{strength} \cdot T\) (not from pure Gaussian noise) and
+        \(\eta\)-DDIM-samples down to \(x_0\) using a real pretrained denoiser.
       </p>
     </div>
     <div class="strength-control">
       <label class="control-label" for="strength-slider">Strength</label>
       <input type="range" id="strength-slider" min="0" max="0" step="1" value="0" disabled>
-      <span class="strength-readout">strength <span id="strength-val">—</span> · t* <span id="tstar-val">—</span></span>
+      <span class="strength-readout">strength <span id="strength-val">—</span> · \(t^\star\) <span id="tstar-val">—</span></span>
       <p class="strength-hint">Higher strength = more forward noise before denoising → heavier model influence on output. Lower strength preserves more of your source.</p>
     </div>
     <div class="denoise-row" data-schedule="linear">
@@ -823,13 +1060,14 @@ canvas.overview-canvas {
         <div class="denoise-frame"><canvas></canvas><span>—</span></div>
       </div>
     </div>
-    <div class="denoise-arrow">noise · t = t*  ────────────────────────────►  recovered · t = 0</div>
+    <div class="denoise-arrow">noise · \(t = t^\star\)  ────────────────────────────►  recovered · \(t = 0\)</div>
     <div class="final-quality">
-      <h3>Final Quality (t = 0)</h3>
+      <h3>Final Quality (\(t = 0\))</h3>
       <p class="final-quality-explain">
-        Quantitative + visual comparison of each schedule's recovered image against the source.
-        Lower <strong>MSE</strong> = closer pixel match. Higher <strong>PSNR</strong> (dB) = less distortion.
-        Higher <strong>SSIM</strong> ∈ [-1, 1] = better structural similarity. Best score per metric is highlighted.
+        Quantitative + visual comparison of each schedule's recovered image \(\hat{x}_0\) against the source \(x_0\).
+        Lower <strong>MSE</strong> \(= \tfrac{1}{N}\sum_i (x_0^{(i)} - \hat{x}_0^{(i)})^2\) — closer pixel match.
+        Higher <strong>PSNR</strong> \(= 20\log_{10}(255 / \sqrt{\mathrm{MSE}})\) — less distortion.
+        Higher <strong>SSIM</strong> \(\in [-1, 1]\) — better structural similarity. Best score per metric is highlighted.
       </p>
       <div class="metric-grid" id="metric-grid">
         <div class="metric-card" data-schedule="linear">
@@ -854,10 +1092,13 @@ canvas.overview-canvas {
     </div>
   </section>
 
-  <footer class="insight">
-    <h3>Key Insight</h3>
-    <p>At the <strong>same timestep</strong>, each schedule retains a different amount of original signal. <span class="linear-text">Linear</span> steadily reduces signal under the classic DDPM-style β schedule. <span class="cosine-text">Cosine</span> preserves structure longer through a smoother curve. <span class="exponential-text">Exponential</span> is configured here as a late-collapse schedule: the image stays readable for longer, then rapidly becomes noise near the end. The schedule choice directly shapes what the model sees and learns at each timestep.</p>
-  </footer>
+  <div class="key-insight">
+    <h4>Key Insight · Denoising</h4>
+    <p class="insight-timestep">At <strong>fixed strength</strong> all three schedules start reverse from the same \(t^\star\), but each schedule injected a <em>different</em> noise level into \(x_{t^\star}\) — so the recovery quality you see in <strong>Final Quality</strong> below is essentially measuring "how much signal does this schedule retain at \(t^\star\)?". Higher \(\bar{\alpha}_{t^\star}\) → easier denoising → better PSNR/SSIM, lower MSE.</p>
+    <p class="insight-alphabar">At <strong>matched signal retention \(\bar{\alpha}\)</strong> the model receives an essentially identical noisy input across schedules — the only thing that varies is the \(t^\star\) label fed to the conditioning. Differences in <strong>Final Quality</strong> here therefore isolate <em>how well the trained denoiser handles each schedule's t-conditioning</em>, not the noise level itself. This is the right comparison for "which schedule is intrinsically easier to denoise from?".</p>
+  </div>
+
+  </section><!-- /phase-denoise -->
 </div>
 
 <script>
@@ -935,10 +1176,17 @@ let manifest = null;          // populated from RESULTS_DIR + manifest.json
 let activeImageId = null;     // current selection (set after manifest loads)
 let seedIdx = 0;
 let currentSeed = SEEDS[0];
-let currentT = 0;
+let currentT = 0;             // raw value of the main slider (0..T).
+                              //   timestep mode: this IS the timestep.
+                              //   alphabar mode: target ᾱ = 1 - currentT/T.
 let strengthIdx = 0;          // index into manifest.strengths
 let activeStrength = 0.5;     // updated when manifest loads / slider moves
 let overviewView = "signal";  // "signal" | "noise" | "snr"
+let compareMode = "timestep"; // "timestep" | "alphabar"
+let strengthSliderRaw = 0;    // raw strength-slider value (timestep mode = strength
+                              //   index; alphabar mode = target_alpha index)
+let alphaIdx = 0;             // index into manifest.target_alphas (alphabar mode)
+let activeTargetAlpha = 0.5;  // selected target ᾱ for alphabar denoising
 let playing = false;
 let playRaf = null;
 let lastFrameTime = 0;
@@ -968,6 +1216,10 @@ const overviewCanvas = document.getElementById("overview-canvas");
 const overviewTabsEl = document.getElementById("overview-tabs");
 const overviewTitleEl    = document.getElementById("overview-title");
 const overviewSubtitleEl = document.getElementById("overview-subtitle");
+const compareModeEl  = document.getElementById("compare-mode");
+const tLabelEl       = document.querySelector(".t-label");
+const strengthLabelEl = document.querySelector('.strength-control .control-label');
+const phaseIndicatorEl = document.getElementById("phase-indicator");
 const strengthSlider = document.getElementById("strength-slider");
 const strengthValEl  = document.getElementById("strength-val");
 const tstarValEl     = document.getElementById("tstar-val");
@@ -996,6 +1248,55 @@ function drawImg(img, canvas, w, h) {
 function clearCanvas(canvas) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// ─── Compare-mode helpers ────────────────────────────────────────────────────
+// In "timestep" mode the main slider's value IS the timestep; every panel
+// renders forward at the same t. In "alphabar" mode the slider's value is
+// reinterpreted as a target ᾱ ∈ [0, 1] (clean → noisy as the slider moves
+// right, just like timestep), and each schedule's displayed t is found by
+// inverting its ᾱ_t curve. So all three panels share the same noise level
+// even though they sit at different t's.
+function targetAlphaBar() {
+  // Slider raw → target ᾱ. 0 (left) = clean (ᾱ=1); T (right) = noisy (ᾱ=0).
+  return 1 - currentT / T;
+}
+
+function findTForAlphaBar(sched, target) {
+  // ᾱ_t is monotonically decreasing in t. Binary-search the closest match.
+  if (target >= sched.alphasBar[0]) return 0;
+  if (target <= sched.alphasBar[T]) return T;
+  let lo = 0, hi = T;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (sched.alphasBar[mid] > target) lo = mid;
+    else                                hi = mid;
+  }
+  return Math.abs(sched.alphasBar[lo] - target) <= Math.abs(sched.alphasBar[hi] - target) ? lo : hi;
+}
+
+function tForSchedule(sched) {
+  return compareMode === "alphabar" ? findTForAlphaBar(sched, targetAlphaBar()) : currentT;
+}
+
+// Alphabar mode: the strength slider snaps to one of `manifest.target_alphas`
+// (matched-noise-level cache) instead of one of `manifest.strengths`.
+// activeTargetAlpha is updated when the slider moves.
+function targetDenoiseAlphaBar() {
+  return activeTargetAlpha;
+}
+
+// Per-schedule t_start for the active target ᾱ — read from the manifest if
+// possible (so it matches what Python actually wrote), else compute on the
+// fly by inverting ᾱ_t.
+function tStartForSchedule(sched, schedName, target) {
+  if (manifest && manifest.t_start_per_alpha_per_schedule
+      && manifest.t_start_per_alpha_per_schedule[schedName]) {
+    const tag = alphaTag(target);
+    const m = manifest.t_start_per_alpha_per_schedule[schedName];
+    if (tag in m) return m[tag];
+  }
+  return findTForAlphaBar(sched, target);
 }
 
 // ─── In-browser noise pipeline (forward only) ───────────────────────────────
@@ -1201,8 +1502,8 @@ function drawCurve(canvas, alphasBar, t, color) {
 // legend formatter. drawOverviewChart() is otherwise generic.
 const OVERVIEW_VIEWS = {
   signal: {
-    title: "Overview · Signal Retention (ᾱ<sub>t</sub>)",
-    subtitle: 'All three schedules at a glance: <span class="linear-text">Linear</span> drops fastest in the middle, <span class="cosine-text">Cosine</span> stays smoother throughout, <span class="exponential-text">Exponential</span> holds high signal early then collapses sharply near t=T.',
+    title: "Overview · Signal Retention \\(\\bar{\\alpha}_t\\)",
+    subtitle: 'All three schedules at a glance: <span class="linear-text">Linear</span> drops fastest in the middle, <span class="cosine-text">Cosine</span> stays smoother throughout, <span class="exponential-text">Exponential</span> holds high signal early then collapses sharply near \\(t=T\\).',
     yLabel:  "ᾱₜ (signal retention)",
     yMin:    0,
     yMax:    1,
@@ -1213,8 +1514,8 @@ const OVERVIEW_VIEWS = {
     legendFmt: (a) => fmt(a),
   },
   noise: {
-    title: "Overview · Noise Amount (1 − ᾱ<sub>t</sub>)",
-    subtitle: 'Mirror of signal retention: how much of x<sub>t</sub> is pure ε. <span class="linear-text">Linear</span> gains noise fastest mid-schedule; <span class="cosine-text">Cosine</span> ramps up smoothly; <span class="exponential-text">Exponential</span> stays gentle then jumps near the end.',
+    title: "Overview · Noise Amount \\(1 - \\bar{\\alpha}_t\\)",
+    subtitle: 'Mirror of signal retention: how much of \\(x_t\\) is pure \\(\\varepsilon\\). <span class="linear-text">Linear</span> gains noise fastest mid-schedule; <span class="cosine-text">Cosine</span> ramps up smoothly; <span class="exponential-text">Exponential</span> stays gentle then jumps near the end.',
     yLabel:  "1 − ᾱₜ (noise amount)",
     yMin:    0,
     yMax:    1,
@@ -1228,7 +1529,7 @@ const OVERVIEW_VIEWS = {
     // SNR = ᾱ_t / (1 − ᾱ_t). Plotted on log10 axis because it spans many
     // orders of magnitude (≈ 10^4 at t≈0 down to 10^-9 near t=T).
     title: "Overview · Signal-to-Noise Ratio  (log scale)",
-    subtitle: "SNR<sub>t</sub> = ᾱ<sub>t</sub> / (1 − ᾱ<sub>t</sub>). Plotted on a log axis (each gridline = 10×). Where the line crosses SNR=1 marks the timestep where signal and noise contribute equally.",
+    subtitle: "\\(\\mathrm{SNR}_t = \\bar{\\alpha}_t / (1 - \\bar{\\alpha}_t)\\). Plotted on a log axis (each gridline = 10×). Where the line crosses \\(\\mathrm{SNR}=1\\) marks the timestep where signal and noise contribute equally.",
     yLabel:  "log₁₀ SNR",
     yMin:    -4,
     yMax:    4,
@@ -1349,34 +1650,80 @@ function drawOverviewChart() {
     ctx.stroke();
   }
 
-  // Current-t marker line
-  const dx = tToPx(currentT);
-  ctx.strokeStyle = "#9ca3af66";
-  ctx.setLineDash([3, 4]);
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(dx, padT); ctx.lineTo(dx, padT + innerH); ctx.stroke();
-  ctx.setLineDash([]);
+  // ── Markers + guides ──────────────────────────────────────────────
+  if (compareMode === "alphabar") {
+    // Horizontal target line at the chosen ᾱ (mapped through the active view).
+    const targetA = targetAlphaBar();
+    const targetVal = view.valueFn(targetA);
+    if (isFinite(targetVal)) {
+      const yT = yToPx(Math.max(view.yMin, Math.min(view.yMax, targetVal)));
+      ctx.strokeStyle = "#9ca3afaa";
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(padL, yT); ctx.lineTo(padL + innerW, yT); ctx.stroke();
+      ctx.setLineDash([]);
+      // small label at the right end of the horizontal line
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "10px ui-monospace, monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("ᾱ=" + targetA.toFixed(3), padL + innerW + 4, yT + 3);
+    }
 
-  // Dots at current t for each schedule
-  for (const name of order) {
-    const sched = schedules[name];
-    const v = view.valueFn(sched.alphasBar[currentT]);
-    if (!isFinite(v)) continue;
-    const yClamped = Math.max(view.yMin, Math.min(view.yMax, v));
-    const dy = yToPx(yClamped);
+    // Faint per-schedule vertical guides + colored dots at the matched t.
+    for (const name of order) {
+      const sched = schedules[name];
+      const tHere = findTForAlphaBar(sched, targetA);
+      const dxs = tToPx(tHere);
+
+      // faint vertical guide
+      ctx.strokeStyle = sched.color + "55";
+      ctx.setLineDash([2, 4]);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(dxs, padT); ctx.lineTo(dxs, padT + innerH); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // dot at (t_per_schedule, target value)
+      if (isFinite(targetVal)) {
+        const dy = yToPx(Math.max(view.yMin, Math.min(view.yMax, targetVal)));
+        ctx.beginPath();
+        ctx.arc(dxs, dy, 5, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff"; ctx.fill();
+        ctx.strokeStyle = sched.color; ctx.lineWidth = 2; ctx.stroke();
+      }
+    }
+  } else {
+    // Timestep mode (original): one shared vertical line + per-schedule dots
+    // at the same x but different y per ᾱ_t.
+    const dx = tToPx(currentT);
+    ctx.strokeStyle = "#9ca3af66";
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(dx, dy, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff"; ctx.fill();
-    ctx.strokeStyle = sched.color; ctx.lineWidth = 2; ctx.stroke();
+    ctx.moveTo(dx, padT); ctx.lineTo(dx, padT + innerH); ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (const name of order) {
+      const sched = schedules[name];
+      const v = view.valueFn(sched.alphasBar[currentT]);
+      if (!isFinite(v)) continue;
+      const yClamped = Math.max(view.yMin, Math.min(view.yMax, v));
+      const dy = yToPx(yClamped);
+      ctx.beginPath();
+      ctx.arc(dx, dy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff"; ctx.fill();
+      ctx.strokeStyle = sched.color; ctx.lineWidth = 2; ctx.stroke();
+    }
   }
 
-  // Legend (per-view value at current t)
+  // Legend (per-view value at current schedule-resolved t)
   const legendX = padL + innerW + 18;
   let legendY = padT + 12;
   ctx.textAlign = "left";
   for (const name of order) {
     const sched = schedules[name];
+    const tHere = tForSchedule(sched);
     ctx.fillStyle = sched.color;
     ctx.fillRect(legendX, legendY - 4, 14, 3);
     ctx.fillStyle = "#e8eaef";
@@ -1384,8 +1731,9 @@ function drawOverviewChart() {
     ctx.fillText(name, legendX + 20, legendY + 1);
     ctx.fillStyle = "#9ca3af";
     ctx.font = "10px ui-monospace, monospace";
-    ctx.fillText(view.legendKey + "=" + view.legendFmt(sched.alphasBar[currentT]),
-                 legendX + 20, legendY + 15);
+    const valLabel = view.legendKey + "=" + view.legendFmt(sched.alphasBar[tHere]);
+    const tLabel = compareMode === "alphabar" ? "  t=" + tHere : "";
+    ctx.fillText(valLabel + tLabel, legendX + 20, legendY + 15);
     legendY += 32;
   }
 }
@@ -1400,8 +1748,22 @@ function fmt(x) {
 function setT(t) {
   currentT = Math.max(0, Math.min(T, Math.round(t)));
   tSlider.value = currentT;
-  tCurrentEl.textContent = currentT;
+  refreshSliderLabel();
   render();
+}
+
+// Update the slider's label and value readout to reflect the active compare
+// mode. Called when the slider moves *and* when the user toggles modes.
+function refreshSliderLabel() {
+  if (compareMode === "alphabar") {
+    if (tLabelEl)   tLabelEl.textContent = "Signal retention ᾱ:";
+    if (tCurrentEl) tCurrentEl.textContent = targetAlphaBar().toFixed(3);
+    if (tMaxEl)     tMaxEl.textContent = "1.000";
+  } else {
+    if (tLabelEl)   tLabelEl.textContent = "Timestep:";
+    if (tCurrentEl) tCurrentEl.textContent = String(currentT);
+    if (tMaxEl)     tMaxEl.textContent = String(T);
+  }
 }
 
 function render() {
@@ -1411,24 +1773,27 @@ function render() {
   panels.forEach(panel => {
     const name = panel.dataset.schedule;
     const sched = schedules[name];
-    const aBar = sched.alphasBar[currentT];
-    const beta = sched.betas[currentT];
+    const tHere = tForSchedule(sched);   // ← per-schedule t (alphabar mode)
+    const aBar = sched.alphasBar[tHere];
+    const beta = sched.betas[tHere];
     panel.querySelector(".beta-val").textContent = fmt(beta);
     panel.querySelector(".alphabar-val").textContent = fmt(aBar);
+    panel.querySelector(".matched-t-val").textContent = String(tHere);
 
     const noisy  = panel.querySelector(".noisy-canvas");
     const finalC = panel.querySelector(".final-canvas");
     if (srcData) {
       const noise = getNoiseFor(currentSeed);
-      // Forward at slider t — recomputed every render so transitions are smooth
-      // across all 1000 timesteps, not snapped to the 8 cached snapshots.
+      // Forward at this schedule's resolved t — in alphabar mode all panels
+      // render the same image (same ᾱ → same forward state), even though
+      // their t labels differ.
       applyNoise(srcData, noise, aBar, noisy);
       // Final-preview always shows max-noise (t=T) for that schedule.
       applyNoise(srcData, noise, sched.alphasBar[T], finalC);
     } else {
       clearCanvas(noisy); clearCanvas(finalC);
     }
-    drawCurve(panel.querySelector(".curve-canvas"), sched.alphasBar, currentT, sched.color);
+    drawCurve(panel.querySelector(".curve-canvas"), sched.alphasBar, tHere, sched.color);
   });
   drawOverviewChart();
   updateTakeaway();
@@ -1449,20 +1814,36 @@ function setCacheStatus(text, kind) {
   cacheStatusEl.className = "cache-status" + (kind ? " " + kind : "");
 }
 
-// Short tag for the status pill describing the denoise mode. img2img with
-// strength<1 starts reverse from a partially-noised version of the source;
-// strength=1 is full unconditional generation from pure noise.
+// Short tag for the status pill describing the denoise mode.
+//   timestep mode: img2img <strength> (t*=N)
+//   alphabar mode: img2img ᾱ=<target> (t* per-schedule resolved)
 function img2imgTag() {
   if (!manifest) return "";
+  if (compareMode === "alphabar") {
+    return "img2img ᾱ=" + activeTargetAlpha.toFixed(2) + " · ";
+  }
   const s = activeStrength;
   if (s == null) return "";
   if (s >= 0.999) return "gen · ";
-  const tStar = currentTStar();
-  return "img2img " + s.toFixed(2) + " (t*=" + tStar + ") · ";
+  return "img2img " + s.toFixed(2) + " (t*=" + currentTStar() + ") · ";
 }
 
 function strengthTag(s) {
   return "s" + String(Math.round(s * 100)).padStart(3, "0");
+}
+
+function alphaTag(a) {
+  return "a" + String(Math.round(a * 100)).padStart(3, "0");
+}
+
+// The directory tag for the active denoise cache, schedule-aware.
+//   timestep mode: same s### for every schedule
+//   alphabar mode: same a### for every schedule (cached from a per-schedule
+//                  t_start so the noise level is matched)
+function activeDirTag(/* schedName ignored — same tag for all schedules */) {
+  return compareMode === "alphabar"
+    ? alphaTag(activeTargetAlpha)
+    : strengthTag(activeStrength);
 }
 
 function currentTStar() {
@@ -1493,45 +1874,59 @@ async function fetchManifest() {
   return r.json();
 }
 
-// Matches generate_cache.py:
-//   <image>/<schedule>_schedule_frames/seed_<n>/<sTag>/denoise_<i>_t<TTTT>.png
-// Forward frames don't have the strength tag (they're strength-independent).
-function frameUrl(imageId, scheduleName, seed, kind, idx, t, sTag) {
+// Matches generate_cache.py output:
+//   <image>/<schedule>_schedule_frames/seed_<n>/<dirTag>/denoise_<i>_t<TTTT>.png
+// where dirTag is either s### (timestep mode) or a### (alphabar mode).
+// Forward frames live alongside seed_<n>/ and don't depend on dirTag.
+function frameUrl(imageId, scheduleName, seed, kind, idx, t, dirTag) {
   const stem = RESULTS_DIR + imageId + "/" + scheduleName + "_schedule_frames/seed_" + seed + "/";
-  if (kind === "denoise" && sTag) {
-    return stem + sTag + "/denoise_" + idx + "_t" + padT(t) + ".png";
+  if (kind === "denoise" && dirTag) {
+    return stem + dirTag + "/denoise_" + idx + "_t" + padT(t) + ".png";
   }
   return stem + kind + "_" + idx + "_t" + padT(t) + ".png";
 }
 
-// Per-strength denoise timesteps (manifest.denoise_timesteps_per_strength).
-// Falls back to legacy single-array formats so older manifests still work.
-function denoiseTimestepsFor(strength) {
+// Denoise timesteps for the current (mode, schedule, dirTag). In alphabar mode
+// they're per-schedule (different t_start per schedule for the same target ᾱ).
+function denoiseTimestepsFor(scheduleName, dirTag) {
   if (!manifest) return [];
-  const tag = strengthTag(strength);
-  const perS = manifest.denoise_timesteps_per_strength;
-  if (perS && perS[tag]) return perS[tag];
+  if (dirTag && dirTag.startsWith("a")) {
+    const perS = manifest.denoise_timesteps_per_alpha_per_schedule;
+    if (perS && perS[scheduleName] && perS[scheduleName][dirTag]) {
+      return perS[scheduleName][dirTag];
+    }
+  } else if (dirTag && dirTag.startsWith("s")) {
+    const perS = manifest.denoise_timesteps_per_strength;
+    if (perS && perS[dirTag]) return perS[dirTag];
+  }
   return manifest.denoise_timesteps || manifest.frame_timesteps || [];
 }
 
-// Eagerly load denoise PNGs for this (image, seed, strength) across all
+// Eagerly load denoise PNGs for one (image, seed, dirTag) across all
 // schedules. Forward frames are NOT fetched — forward is in-browser.
-async function preloadFrames(imageId, seed, strength) {
+async function preloadFramesForTag(imageId, seed, dirTag) {
   if (!manifest) return;
-  const tag = strengthTag(strength);
-  const dnTs = denoiseTimestepsFor(strength);
   for (const sched of manifest.schedules) {
-    const key = imageId + ":" + seed + ":" + sched + ":" + tag;
+    const key = imageId + ":" + seed + ":" + sched + ":" + dirTag;
     if (frameCache[key]) continue;
-    const dnReqs = dnTs.map((t, i) => loadImg(frameUrl(imageId, sched, seed, "denoise", i, t, tag)));
+    const dnTs = denoiseTimestepsFor(sched, dirTag);
+    const dnReqs = dnTs.map((t, i) => loadImg(frameUrl(imageId, sched, seed, "denoise", i, t, dirTag)));
     const dnImgs = await Promise.all(dnReqs);
     const denoise = dnImgs.map((img, i) => ({ t: dnTs[i], img }));
     frameCache[key] = { denoise };
   }
 }
 
+// Convenience wrapper: load the strength-indexed cache (timestep mode).
+async function preloadFrames(imageId, seed, strength) {
+  return preloadFramesForTag(imageId, seed, strengthTag(strength));
+}
+
+// Cache key for the denoise frames the active mode wants for this schedule.
+// All schedules share the same dirTag; the cached PNGs themselves were
+// generated against per-schedule t_start (in alphabar mode).
 function activeFrameKey(sched) {
-  return activeImageId + ":" + currentSeed + ":" + sched + ":" + strengthTag(activeStrength);
+  return activeImageId + ":" + currentSeed + ":" + sched + ":" + activeDirTag(sched);
 }
 
 // ─── Denoise strip render ───────────────────────────────────────────────────
@@ -1564,24 +1959,80 @@ function renderAllDenoising() {
 }
 
 function refreshStrengthReadout() {
-  if (strengthValEl) strengthValEl.textContent = activeStrength.toFixed(2);
-  if (tstarValEl)    tstarValEl.textContent    = currentTStar();
+  if (compareMode === "alphabar") {
+    // Slider snaps to one of manifest.target_alphas.
+    const alphas = manifest && Array.isArray(manifest.target_alphas) ? manifest.target_alphas : [];
+    if (strengthSlider) {
+      strengthSlider.min  = 0;
+      strengthSlider.max  = Math.max(0, alphas.length - 1);
+      strengthSlider.step = 1;
+      strengthSlider.value = alphaIdx;
+      strengthSlider.disabled = !alphas.length;
+    }
+    if (strengthLabelEl) strengthLabelEl.textContent = "Signal retention";
+    if (strengthValEl)   strengthValEl.textContent = "ᾱ = " + activeTargetAlpha.toFixed(2);
+    // Per-schedule t* readout (each schedule lands at a different t for the
+    // same target ᾱ).
+    if (tstarValEl) {
+      const linT = tStartForSchedule(schedules.linear,      "linear",      activeTargetAlpha);
+      const cosT = tStartForSchedule(schedules.cosine,      "cosine",      activeTargetAlpha);
+      const expT = tStartForSchedule(schedules.exponential, "exponential", activeTargetAlpha);
+      tstarValEl.textContent = "t* lin " + linT + " · cos " + cosT + " · exp " + expT;
+    }
+  } else {
+    // Timestep mode: slider snaps to one of manifest.strengths.
+    if (strengthSlider && manifest && Array.isArray(manifest.strengths)) {
+      strengthSlider.min  = 0;
+      strengthSlider.max  = manifest.strengths.length - 1;
+      strengthSlider.step = 1;
+      strengthSlider.value = strengthIdx;
+      strengthSlider.disabled = false;
+    }
+    if (strengthLabelEl) strengthLabelEl.textContent = "Strength";
+    if (strengthValEl)   strengthValEl.textContent = activeStrength.toFixed(2);
+    if (tstarValEl)      tstarValEl.textContent    = currentTStar();
+  }
 }
 
 // ─── Takeaway text — updates with the timestep slider ───────────────────────
-const TAKEAWAY_BUCKETS = [
-  { max:  100, text: "Tiny noise added — all schedules look near-identical to the source. Differences between curves are imperceptible at low t." },
-  { max:  350, text: "All schedules still retain visible structure, but <strong class=\"linear-text\">linear</strong> has already reduced signal more aggressively than <strong class=\"cosine-text\">cosine</strong> or <strong class=\"exponential-text\">exponential</strong>." },
-  { max:  750, text: "<strong class=\"cosine-text\">Cosine</strong> keeps smoother degradation; <strong class=\"exponential-text\">exponential</strong> still preserves more structure but is close to its late-collapse cliff. <strong class=\"linear-text\">Linear</strong> is well into noise-dominated territory." },
+// Timestep-mode takeaway: keyed on slider t.
+const TAKEAWAY_BUCKETS_TIMESTEP = [
+  { max:  100, text: "Tiny noise added — all schedules look near-identical to the source. Differences between \\(\\bar{\\alpha}_t\\) curves are imperceptible at low \\(t\\)." },
+  { max:  350, text: "All schedules still retain visible structure, but <strong class=\"linear-text\">linear</strong> has already reduced \\(\\bar{\\alpha}_t\\) more aggressively than <strong class=\"cosine-text\">cosine</strong> or <strong class=\"exponential-text\">exponential</strong>." },
+  { max:  750, text: "<strong class=\"cosine-text\">Cosine</strong> keeps smoother degradation; <strong class=\"exponential-text\">exponential</strong> still preserves more structure but is close to its late-collapse cliff. <strong class=\"linear-text\">Linear</strong> is well into noise-dominated territory \\((\\bar{\\alpha}_t \\ll 1)\\)." },
   { max: 1001, text: "<strong class=\"exponential-text\">Exponential</strong> rapidly loses structure here; the model now receives a much harder denoising input — note how recovery quality drops at higher strengths." },
+];
+
+// Alphabar-mode takeaway: keyed on target ᾱ. Buckets are ordered HIGH ᾱ
+// (clean) → LOW ᾱ (noisy) so we can pick by `target ≥ min`.
+const TAKEAWAY_BUCKETS_ALPHABAR = [
+  { min: 0.85, text: "At \\(\\bar{\\alpha} \\approx 0.9\\) all schedules are barely noised. The forward views look essentially identical — but each schedule reached this near-clean state at a wildly different \\(t\\) (linear <em>much</em> earlier than exponential). Schedule choice doesn't matter for the <em>view</em> here, only for <em>which step the model is told it's at</em>." },
+  { min: 0.45, text: "At \\(\\bar{\\alpha} \\approx 0.6\\!-\\!0.8\\), still mostly signal. <strong class=\"linear-text\">Linear</strong> already arrived; <strong class=\"cosine-text\">cosine</strong> follows; <strong class=\"exponential-text\">exponential</strong> is still near the start of its schedule. Same noise level, very different \\(t\\)-conditioning." },
+  { min: 0.20, text: "At \\(\\bar{\\alpha} \\approx 0.3\\!-\\!0.5\\), half-signal half-noise. This is the crossover region where schedule choice shows its personality: <strong class=\"linear-text\">linear</strong> blew through this range fast, <strong class=\"cosine-text\">cosine</strong> dwells here longest, and <strong class=\"exponential-text\">exponential</strong> only just enters." },
+  { min: 0.05, text: "At \\(\\bar{\\alpha} \\approx 0.1\\!-\\!0.2\\), the source is mostly noise. <strong class=\"linear-text\">Linear</strong> hit this state long ago. <strong class=\"exponential-text\">Exponential</strong> is right at the start of its late-collapse cliff — a tiny additional \\(t\\) increment now wipes out a lot of remaining signal." },
+  { min: 0.00, text: "At \\(\\bar{\\alpha} \\lesssim 0.05\\), near-pure noise. Even <strong class=\"cosine-text\">cosine</strong>, the slowest to fully degrade, is nearly there. <strong class=\"exponential-text\">Exponential</strong> only reaches this regime in the last few timesteps — its curve drops vertically at the very end." },
 ];
 
 function updateTakeaway() {
   if (!takeawayTEl || !takeawayTextEl) return;
+  if (compareMode === "alphabar") {
+    const target = targetAlphaBar();
+    takeawayTEl.innerHTML = "ᾱ = " + target.toFixed(3);
+    for (const bucket of TAKEAWAY_BUCKETS_ALPHABAR) {
+      if (target >= bucket.min) {
+        takeawayTextEl.innerHTML = bucket.text;
+        typesetMath(takeawayTextEl);
+        typesetMath(takeawayTEl);
+        return;
+      }
+    }
+    return;
+  }
   takeawayTEl.textContent = "t = " + currentT;
-  for (const bucket of TAKEAWAY_BUCKETS) {
+  for (const bucket of TAKEAWAY_BUCKETS_TIMESTEP) {
     if (currentT < bucket.max) {
       takeawayTextEl.innerHTML = bucket.text;
+      typesetMath(takeawayTextEl);
       return;
     }
   }
@@ -1695,9 +2146,30 @@ function renderMetrics() {
     worst.psnr = valid.reduce((a, b) => a[1].psnr < b[1].psnr ? a : b)[0];
     worst.ssim = valid.reduce((a, b) => a[1].ssim < b[1].ssim ? a : b)[0];
   }
+  // Tally per-metric wins to pick the schedule that wins the most categories.
+  // Ties → no overall-best flag (keeps the badge meaningful).
+  const wins = Object.fromEntries(manifest.schedules.map(s => [s, 0]));
+  if (valid.length > 1) {
+    for (const k of ["mse", "psnr", "ssim"]) {
+      if (best[k]) wins[best[k]] += 1;
+    }
+  }
+  let overallBest = null;
+  let overallBestWins = 0;
+  let tied = false;
+  for (const sched of manifest.schedules) {
+    if (wins[sched] > overallBestWins) {
+      overallBest = sched; overallBestWins = wins[sched]; tied = false;
+    } else if (wins[sched] === overallBestWins && wins[sched] > 0) {
+      tied = true;
+    }
+  }
+  if (tied) overallBest = null;
+
   for (const card of metricGridEl.querySelectorAll(".metric-card")) {
     const sched = card.dataset.schedule;
     const m = all[sched];
+    card.classList.toggle("overall-best", sched === overallBest);
     for (const cell of card.querySelectorAll(".metric-row .value")) {
       const metric = cell.dataset.metric;
       cell.classList.remove("best", "worst");
@@ -1722,7 +2194,7 @@ async function selectImage(id) {
   setCacheStatus(id + " · seed " + currentSeed + " · loading…", "loading");
   try {
     await Promise.all([
-      preloadFrames(id, currentSeed, activeStrength),
+      preloadFramesForTag(id, currentSeed, activeDirTag()),
       loadSourceImageData(id),
     ]);
     setCacheStatus(id + " · seed " + currentSeed + " · " + img2imgTag() + "ready", "ready");
@@ -1740,7 +2212,7 @@ async function cycleSeed() {
   refreshSeedDisplay();
   setCacheStatus(activeImageId + " · seed " + currentSeed + " · loading…", "loading");
   try {
-    await preloadFrames(activeImageId, currentSeed, activeStrength);
+    await preloadFramesForTag(activeImageId, currentSeed, activeDirTag());
     setCacheStatus(activeImageId + " · seed " + currentSeed + " · " + img2imgTag() + "ready", "ready");
   } catch (e) {
     setCacheStatus("error: " + e.message, "loading");
@@ -1751,7 +2223,30 @@ async function cycleSeed() {
 }
 
 async function setStrength(idx) {
-  if (!manifest || !Array.isArray(manifest.strengths)) return;
+  if (!manifest) return;
+
+  if (compareMode === "alphabar") {
+    // Alphabar mode: slider indexes into manifest.target_alphas.
+    const alphas = Array.isArray(manifest.target_alphas) ? manifest.target_alphas : [];
+    if (!alphas.length) return;
+    alphaIdx = Math.max(0, Math.min(alphas.length - 1, idx));
+    activeTargetAlpha = alphas[alphaIdx];
+    if (strengthSlider) strengthSlider.value = alphaIdx;
+    refreshStrengthReadout();
+    setCacheStatus(activeImageId + " · seed " + currentSeed + " · loading ᾱ=" + activeTargetAlpha.toFixed(2) + "…", "loading");
+    try {
+      await preloadFramesForTag(activeImageId, currentSeed, alphaTag(activeTargetAlpha));
+      setCacheStatus(activeImageId + " · seed " + currentSeed + " · " + img2imgTag() + "ready", "ready");
+    } catch (e) {
+      setCacheStatus("error: " + e.message, "loading");
+      console.error(e);
+    }
+    renderAllDenoising();
+    return;
+  }
+
+  // Timestep mode: slider indexes into manifest.strengths.
+  if (!Array.isArray(manifest.strengths) || !manifest.strengths.length) return;
   strengthIdx = Math.max(0, Math.min(manifest.strengths.length - 1, idx));
   activeStrength = manifest.strengths[strengthIdx];
   if (strengthSlider) strengthSlider.value = strengthIdx;
@@ -1785,6 +2280,46 @@ if (overviewTabsEl) {
   });
 }
 
+if (compareModeEl) {
+  compareModeEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".compare-btn");
+    if (!btn) return;
+    setCompareMode(btn.dataset.mode);
+  });
+}
+
+async function setCompareMode(mode) {
+  if (mode !== "timestep" && mode !== "alphabar") return;
+  if (mode === compareMode) return;
+  compareMode = mode;
+  // CSS-driven swap: panel metrics & footer key-insight switch on this class.
+  document.body.classList.toggle("compare-alphabar", mode === "alphabar");
+  document.body.classList.toggle("compare-timestep", mode === "timestep");
+  if (compareModeEl) {
+    for (const b of compareModeEl.querySelectorAll(".compare-btn")) {
+      b.classList.toggle("active", b.dataset.mode === mode);
+    }
+  }
+
+  if (mode === "alphabar") {
+    // Make sure we have at least one target_alpha cached for the current
+    // (image, seed). Default to whatever target_alpha the slider currently
+    // points to.
+    const alphas = manifest && Array.isArray(manifest.target_alphas) ? manifest.target_alphas : [];
+    if (alphas.length) {
+      alphaIdx = Math.max(0, Math.min(alphas.length - 1, alphaIdx));
+      activeTargetAlpha = alphas[alphaIdx];
+      preloadFramesForTag(activeImageId, currentSeed, alphaTag(activeTargetAlpha))
+        .then(() => { renderAllDenoising(); })
+        .catch(err => console.warn("[diffusion-viz]", err));
+    }
+  }
+  refreshSliderLabel();
+  refreshStrengthReadout();
+  render();
+  renderAllDenoising();
+}
+
 function setOverviewView(view) {
   if (!OVERVIEW_VIEWS[view]) return;
   overviewView = view;
@@ -1796,7 +2331,17 @@ function setOverviewView(view) {
   const cfg = OVERVIEW_VIEWS[view];
   if (overviewTitleEl)    overviewTitleEl.innerHTML    = cfg.title;
   if (overviewSubtitleEl) overviewSubtitleEl.innerHTML = cfg.subtitle;
+  typesetMath(overviewTitleEl);
+  typesetMath(overviewSubtitleEl);
   drawOverviewChart();
+}
+
+// Re-typeset a specific element after we mutate its innerHTML so MathJax
+// converts any \( … \) / \[ … \] in the new content into rendered SVG. No-op
+// before MathJax has loaded (typesetPromise is undefined).
+function typesetMath(el) {
+  if (!el || !window.MathJax || !MathJax.typesetPromise) return;
+  MathJax.typesetPromise([el]).catch(err => console.warn("[MathJax]", err));
 }
 
 function play() {
@@ -1837,6 +2382,9 @@ window.addEventListener("keydown", (e) => {
 });
 
 async function init() {
+  // Seed the body class so CSS-driven mode-specific text starts in the right
+  // state on load (default: timestep mode).
+  document.body.classList.add("compare-" + compareMode);
   refreshSeedDisplay();
   setCacheStatus("loading manifest…", "loading");
   try {
@@ -1855,24 +2403,92 @@ async function init() {
   activeImageId = manifest.images[0];
   imageSelectEl.value = activeImageId;
 
-  // Configure the strength slider from manifest. Fallback for legacy manifests
-  // (which had a single `strength` field) keeps the slider disabled.
+  // Strengths (timestep-mode slider snaps to one of these).
   const strengths = Array.isArray(manifest.strengths) ? manifest.strengths : null;
-  if (strengths && strengths.length && strengthSlider) {
+  if (strengths && strengths.length) {
     strengthIdx = Math.min(strengths.length - 1, Math.max(0,
       Math.round((strengths.length - 1) / 2)));    // start near the middle
     activeStrength = strengths[strengthIdx];
-    strengthSlider.min  = 0;
-    strengthSlider.max  = strengths.length - 1;
-    strengthSlider.step = 1;
-    strengthSlider.value = strengthIdx;
-    strengthSlider.disabled = false;
   } else if (manifest.strength != null) {
     activeStrength = manifest.strength;
   }
+  // Target ᾱ values (alphabar-mode slider snaps to one of these).
+  const tAlphas = Array.isArray(manifest.target_alphas) ? manifest.target_alphas : null;
+  if (tAlphas && tAlphas.length) {
+    alphaIdx = Math.min(tAlphas.length - 1, Math.max(0,
+      Math.round((tAlphas.length - 1) / 2)));      // start near the middle
+    activeTargetAlpha = tAlphas[alphaIdx];
+  }
   refreshStrengthReadout();
+  setupPhaseObserver();
+  setupSubtitleObserver();
 
   await selectImage(activeImageId);
+}
+
+// Watch the page subtitle. While it's still on screen the sticky-header phase
+// indicator stays hidden (page top doesn't need a "you are here" label).
+// Once the user has scrolled past it, body gets `.scrolled-past-subtitle`
+// and the indicator slides in.
+function setupSubtitleObserver() {
+  const sub = document.querySelector(".subtitle");
+  if (!sub || typeof IntersectionObserver !== "function") return;
+  const obs = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        document.body.classList.toggle("scrolled-past-subtitle", !e.isIntersecting);
+      }
+    },
+    // Shrink the top of the viewport so the subtitle counts as "out of view"
+    // as soon as it reaches the bottom edge of the sticky header.
+    { rootMargin: "-90px 0px 0px 0px" }
+  );
+  obs.observe(sub);
+}
+
+// Watch which .phase section is currently dominant in the viewport and
+// reflect it in the sticky-header phase indicator. Picks whichever phase has
+// the largest intersection ratio with the viewport.
+function setupPhaseObserver() {
+  if (!phaseIndicatorEl || typeof IntersectionObserver !== "function") return;
+  const phases = document.querySelectorAll(".phase");
+  if (!phases.length) return;
+
+  const ratios = new Map();
+  for (const p of phases) ratios.set(p, 0);
+
+  function updateIndicator() {
+    let bestPhase = null, bestR = 0;
+    for (const [el, r] of ratios) {
+      if (r > bestR) { bestR = r; bestPhase = el; }
+    }
+    if (!bestPhase || bestR < 0.05) {
+      phaseIndicatorEl.textContent = "";
+      phaseIndicatorEl.removeAttribute("data-phase");
+      return;
+    }
+    if (bestPhase.classList.contains("phase-forward")) {
+      phaseIndicatorEl.textContent = "Forward · Noising";
+      phaseIndicatorEl.setAttribute("data-phase", "forward");
+    } else if (bestPhase.classList.contains("phase-denoise")) {
+      phaseIndicatorEl.textContent = "Denoising · Image-to-Image Recovery";
+      phaseIndicatorEl.setAttribute("data-phase", "denoise");
+    } else {
+      phaseIndicatorEl.textContent = "";
+      phaseIndicatorEl.removeAttribute("data-phase");
+    }
+  }
+
+  const obs = new IntersectionObserver((entries) => {
+    for (const entry of entries) ratios.set(entry.target, entry.intersectionRatio);
+    updateIndicator();
+  }, {
+    // Sample many threshold points so we get smooth ratio updates.
+    threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
+    // Anchor the viewport just below the sticky header.
+    rootMargin: "-80px 0px -20% 0px",
+  });
+  phases.forEach(p => obs.observe(p));
 }
 
 window.addEventListener("load", init);

@@ -76,10 +76,14 @@ DENOISE_FRAMES = 8
 DEFAULT_NUM_STEPS = 100     # evenly-spaced sample transitions in the denoise range
 DEFAULT_ETA = 0.0           # 0.0 = deterministic DDIM (cleaner output);
                             # 1.0 = DDPM marginals (more variety, more noise)
-DEFAULT_STRENGTHS = [0.3, 0.5, 0.7, 0.9]  # SDEdit img2img strengths to render.
-                            # Frontend slider snaps to one of these. Each
-                            # strength produces an independent reverse trajectory
-                            # — small=subtle clean-up, large=heavy stylization.
+DEFAULT_STRENGTHS = [0.3, 0.5, 0.7, 0.9]  # SDEdit img2img strengths (timestep-mode).
+                            # All schedules share t_start = round(s · T), so the
+                            # *resulting* ᾱ_{t_start} differs by schedule.
+
+DEFAULT_TARGET_ALPHAS = [0.8, 0.6, 0.4, 0.2, 0.1]  # Target ᾱ values (alphabar-mode).
+                            # Each schedule's t_start is found by inverting its
+                            # ᾱ_t curve so all schedules denoise from the SAME
+                            # noise level for fair side-by-side comparison.
 
 
 # ─── Schedules ───────────────────────────────────────────────────────────────
@@ -175,6 +179,27 @@ def strength_tag(strength: float) -> str:
     return "s" + str(int(round(strength * 100))).zfill(3)
 
 
+def alpha_tag(target_alpha: float) -> str:
+    """Target ᾱ → 'a080', 'a060', 'a010', etc. Used as the directory name for
+    matched-noise-level (alphabar-mode) denoise frames."""
+    return "a" + str(int(round(target_alpha * 100))).zfill(3)
+
+
+def find_t_for_alpha(aBar: np.ndarray, target: float) -> int:
+    """Invert ᾱ_t to find the t whose ᾱ is closest to `target`. ᾱ_t is
+    monotonically decreasing in t (clean → noisy), so binary search works."""
+    if target >= aBar[0]:           return 0
+    if target <= aBar[len(aBar) - 1]: return len(aBar) - 1
+    lo, hi = 0, len(aBar) - 1
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if aBar[mid] > target:
+            lo = mid
+        else:
+            hi = mid
+    return lo if abs(aBar[lo] - target) <= abs(aBar[hi] - target) else hi
+
+
 def run_unified(
     model,
     aBar: np.ndarray,
@@ -184,6 +209,7 @@ def run_unified(
     num_steps: int = DEFAULT_NUM_STEPS,
     eta: float = DEFAULT_ETA,
     strength: float = 0.6,
+    t_start: int = None,
 ) -> Tuple[List[Tuple[int, torch.Tensor]], List[Tuple[int, torch.Tensor]]]:
     """
     Unified forward + image-to-image (SDEdit) reverse pipeline.
@@ -200,8 +226,15 @@ def run_unified(
 
     Returns (forward_snaps, denoise_snaps) — each a list of (t, tensor) of
     length DENOISE_FRAMES. Forward spans [0, T]; denoise spans [0, t_start].
+
+    If `t_start` is provided it takes precedence over `strength` (this is what
+    the alphabar-mode generation pass uses, so each schedule lands at the same
+    target ᾱ regardless of curve shape).
     """
-    t_start = max(1, min(T, int(round(strength * T))))
+    if t_start is None:
+        t_start = max(1, min(T, int(round(strength * T))))
+    else:
+        t_start = max(1, min(T, int(t_start)))
 
     # ε for forward (and reverse start) — generator advanced once.
     g_eps = torch.Generator(device="cpu").manual_seed(int(seed))
@@ -320,10 +353,14 @@ def main() -> int:
                         help=f"DDIM stochasticity (default {DEFAULT_ETA}). 0=deterministic "
                              "(cleanest), 1=DDPM marginals (more variety, more residual noise).")
     parser.add_argument("--strengths", type=float, nargs="+", default=DEFAULT_STRENGTHS,
-                        help=f"SDEdit img2img strengths to render (default {DEFAULT_STRENGTHS}). "
-                             "Each value gets its own reverse trajectory; the frontend slider "
-                             "snaps between them. Smaller=subtle clean-up; larger=heavier "
-                             "stylization; 1.0=unconditional generation from pure noise.")
+                        help=f"SDEdit img2img strengths (timestep-mode, default {DEFAULT_STRENGTHS}). "
+                             "All schedules use the same t_start = round(s · T); the resulting "
+                             "ᾱ_{t_start} differs by schedule. Pass [] to skip strength caches.")
+    parser.add_argument("--target-alphas", type=float, nargs="+", default=DEFAULT_TARGET_ALPHAS,
+                        help=f"Matched-noise-level targets (alphabar-mode, default "
+                             f"{DEFAULT_TARGET_ALPHAS}). Each schedule's t_start is solved by "
+                             f"inverting its ᾱ_t curve so all schedules denoise from the SAME "
+                             f"ᾱ. Pass [] to skip target-alpha caches.")
     parser.add_argument("--device", default=None, help="cuda / mps / cpu (default: auto)")
     parser.add_argument("--schedules", nargs="+", default=list(SCHEDULES.keys()),
                         help="subset of schedules to render")
@@ -359,21 +396,25 @@ def main() -> int:
     if not schedules_to_run:
         sys.exit(f"error: no valid schedules in {args.schedules}; choose from {list(SCHEDULES)}")
 
-    strengths = [s for s in args.strengths if 0.0 < s <= 1.0]
-    if not strengths:
-        sys.exit(f"error: no valid strengths in {args.strengths}; need values ∈ (0, 1]")
-    strengths = sorted(set(round(s, 3) for s in strengths))
+    strengths = sorted(set(round(s, 3) for s in args.strengths if 0.0 < s <= 1.0))
+    target_alphas = sorted(
+        {round(a, 3) for a in args.target_alphas if 0.0 < a < 1.0},
+        reverse=True,  # high ᾱ (clean) first → consistent slider ordering
+    )
+    if not strengths and not target_alphas:
+        sys.exit("error: nothing to generate — provide --strengths and/or --target-alphas")
 
     results_dir.mkdir(parents=True, exist_ok=True)
     target_size = args.frame_size if args.frame_size > 0 else model_size
 
     image_ids: List[str] = []
     pbar = tqdm(
-        total=len(image_paths) * len(schedules_to_run) * len(args.seeds) * len(strengths),
+        total=len(image_paths) * len(schedules_to_run) * len(args.seeds)
+              * (len(strengths) + len(target_alphas)),
         desc="trajectories", unit="traj",
     )
     # forward frames written once per (image, schedule, seed) — they don't
-    # depend on strength (forward is always closed-form x_t over [0, T]).
+    # depend on strength or target-alpha (forward is closed-form x_t over [0, T]).
     forward_done: set = set()
 
     for img_path in image_paths:
@@ -390,6 +431,7 @@ def main() -> int:
                 seed_dir = sched_dir / f"seed_{seed}"
                 seed_dir.mkdir(exist_ok=True)
 
+                # ── Strength-indexed caches (timestep mode) ────────────────
                 for strength in strengths:
                     fwd_snaps, dn_snaps = run_unified(
                         model, aBar, x0,
@@ -411,6 +453,35 @@ def main() -> int:
                             s_dir / f"denoise_{i}_t{t:04d}.png"
                         )
                     pbar.update(1)
+
+                # ── Target-α caches (alphabar mode) ────────────────────────
+                # For each target ᾱ we resolve t_start by inverting THIS
+                # schedule's curve, so all schedules denoise from the same ᾱ.
+                for target_alpha in target_alphas:
+                    t_start_a = max(1, find_t_for_alpha(aBar, target_alpha))
+                    fwd_snaps_a, dn_snaps_a = run_unified(
+                        model, aBar, x0,
+                        seed=seed, device=device,
+                        num_steps=args.num_steps, eta=args.eta, t_start=t_start_a,
+                    )
+                    # Forward gets written once per (img, sched, seed) and is
+                    # already done from the strength loop (or, if strengths
+                    # list was empty, write it from the first alpha pass).
+                    fwd_key = (img_id, sched_name, seed)
+                    if fwd_key not in forward_done:
+                        for i, (t, x_t) in enumerate(fwd_snaps_a):
+                            tensor_to_image(x_t, target_size).save(
+                                seed_dir / f"forward_{i}_t{t:04d}.png"
+                            )
+                        forward_done.add(fwd_key)
+
+                    a_dir = seed_dir / alpha_tag(target_alpha)
+                    a_dir.mkdir(exist_ok=True)
+                    for i, (t, x_t) in enumerate(dn_snaps_a):
+                        tensor_to_image(x_t, target_size).save(
+                            a_dir / f"denoise_{i}_t{t:04d}.png"
+                        )
+                    pbar.update(1)
     pbar.close()
 
     denoise_ts_per_strength = {}
@@ -422,6 +493,23 @@ def main() -> int:
             args.num_steps, t_start
         )
 
+    # Per-(schedule, alpha_tag) → t_start and denoise frame timesteps. The
+    # frontend uses these in alphabar mode to construct PNG URLs and to
+    # display each schedule's resolved t* under the same target ᾱ.
+    t_start_per_alpha_per_sched: Dict[str, Dict[str, int]] = {}
+    denoise_ts_per_alpha_per_sched: Dict[str, Dict[str, List[int]]] = {}
+    for sched_name in schedules_to_run:
+        aBar = SCHEDULES[sched_name]
+        t_start_per_alpha_per_sched[sched_name] = {}
+        denoise_ts_per_alpha_per_sched[sched_name] = {}
+        for target_alpha in target_alphas:
+            tag = alpha_tag(target_alpha)
+            t_start_a = max(1, find_t_for_alpha(aBar, target_alpha))
+            t_start_per_alpha_per_sched[sched_name][tag] = t_start_a
+            denoise_ts_per_alpha_per_sched[sched_name][tag] = compute_denoise_frame_ts(
+                args.num_steps, t_start_a
+            )
+
     manifest = {
         "model": args.model,
         "model_native_size": model_size,
@@ -432,11 +520,16 @@ def main() -> int:
         "strengths": strengths,
         "strength_tags": {strength_tag(s): s for s in strengths},
         "t_start_per_strength": t_start_per_strength,
+        "target_alphas": target_alphas,
+        "alpha_tags": {alpha_tag(a): a for a in target_alphas},
+        "t_start_per_alpha_per_schedule": t_start_per_alpha_per_sched,
+        "denoise_timesteps_per_alpha_per_schedule": denoise_ts_per_alpha_per_sched,
         "frames_per_trajectory": DENOISE_FRAMES,
         "forward_timesteps": compute_forward_frame_ts(),
         "denoise_timesteps_per_strength": denoise_ts_per_strength,
         "forward_filename": "forward_{i}_t{t:04d}.png",
-        "denoise_filename": "{strength_tag}/denoise_{i}_t{t:04d}.png",
+        "denoise_filename_strength": "{strength_tag}/denoise_{i}_t{t:04d}.png",
+        "denoise_filename_alpha":    "{alpha_tag}/denoise_{i}_t{t:04d}.png",
         "seeds": list(args.seeds),
         "schedules": schedules_to_run,
         "images": image_ids,
