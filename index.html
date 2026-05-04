@@ -80,7 +80,50 @@ h1 {
   flex-wrap: wrap;
 }
 
-.image-controls { display: flex; gap: 10px; }
+.image-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.control-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.image-select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 32px 7px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%23818cf8' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.15s;
+}
+
+.image-select:hover { border-color: #353a4b; }
+.image-select:focus { outline: none; border-color: var(--accent); }
+.image-select option { background: var(--bg-panel); color: var(--text); }
+
+.cache-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: ui-monospace, "SF Mono", monospace;
+}
+
+.cache-status.ready { color: var(--cosine); }
+.cache-status.loading { color: var(--exponential); }
 
 button {
   background: var(--bg);
@@ -225,8 +268,7 @@ canvas.noisy-canvas {
   display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  image-rendering: auto;
   border-radius: 8px;
   background: #0a0c12;
 }
@@ -251,7 +293,7 @@ canvas.curve-canvas {
 .final-preview canvas {
   width: 48px;
   height: 48px;
-  image-rendering: pixelated;
+  image-rendering: auto;
   border-radius: 4px;
   flex-shrink: 0;
   background: #0a0c12;
@@ -434,8 +476,7 @@ canvas.overview-canvas {
 .denoise-frame canvas {
   width: 100%;
   aspect-ratio: 1 / 1;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  image-rendering: auto;
   border-radius: 4px;
   background: #0a0c12;
 }
@@ -474,11 +515,13 @@ canvas.overview-canvas {
 
   <section class="controls">
     <div class="image-controls">
-      <input type="file" id="upload-input" accept="image/*" hidden>
-      <button id="upload-btn">Upload Image</button>
-      <button id="sample-btn" class="primary">Use Sample Image</button>
-      <button id="regen-noise-btn" title="Sample fresh ε ~ 𝒩(0, I)">↻ Regenerate Noise</button>
-      <span class="seed-info">seed <span id="seed-val">—</span></span>
+      <label class="control-label" for="image-select">Image</label>
+      <select id="image-select" class="image-select" disabled>
+        <option value="">loading…</option>
+      </select>
+      <button id="regen-noise-btn" title="Cycle through the 5 pre-rendered seeds" disabled>↻ Regenerate Noise</button>
+      <span class="seed-info">seed <span id="seed-val">—</span> / 4</span>
+      <span class="cache-status loading" id="cache-status">cache: loading manifest…</span>
     </div>
     <div class="time-controls">
       <div class="slider-row">
@@ -556,12 +599,14 @@ canvas.overview-canvas {
 
   <section class="denoise-section">
     <div class="denoise-header">
-      <h2>Denoising · Reverse Diffusion (DDPM Sampling)</h2>
+      <h2>Denoising · Image-to-Image (SDEdit-style reverse)</h2>
       <p class="denoise-explain">
-        Starting from pure noise <code>x<sub>T</sub> ~ 𝒩(0, I)</code>, step backwards using the posterior
-        <code>q(x<sub>t-1</sub> | x<sub>t</sub>, x<sub>0</sub>)</code> with a perfect-oracle denoiser
-        (i.e. <code>ε̂ = ε*</code>). This is the actual sampling algorithm a trained diffusion model
-        approximates — watch the same image emerge from noise under each schedule.
+        Reverse starts from the partially-noised source image <code>x<sub>t*</sub></code> at
+        <code>t* = strength · T</code> (not from pure Gaussian noise) and η-DDIM-samples down
+        to <code>x<sub>0</sub></code> using a real pretrained denoiser. Because reverse begins
+        from a noised version of <em>your</em> image rather than a fresh sample, the output
+        preserves the source's structure rather than hallucinating a face from the model's
+        training distribution.
       </p>
     </div>
     <div class="denoise-row" data-schedule="linear">
@@ -616,21 +661,20 @@ canvas.overview-canvas {
 "use strict";
 
 const T = 1000;
+// Canvas internal-bitmap sizes. These should be ≥ the cached PNG resolution
+// (which is the model's native size — 256 for celebahq-256, 32 for cifar10-32)
+// so the browser doesn't lossily downscale before display.
 const IMG_SIZE = 256;
-const FINAL_SIZE = 56;
-const DENOISE_SIZE = 96;
+const FINAL_SIZE = 256;
+const DENOISE_SIZE = 256;
 const DENOISE_FRAMES = 8;
-const DENOISE_STRIDE = 20;
 
-// Seedable PRNG (Mulberry32) so noise is reproducible from the seed shown in the UI
-let _rngState = 0;
-function setSeed(seed) { _rngState = seed | 0; }
-function rng() {
-  _rngState = (_rngState + 0x6D2B79F5) | 0;
-  let t = Math.imul(_rngState ^ (_rngState >>> 15), 1 | _rngState);
-  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-}
+// Where the Python script wrote its output. Everything is loaded as cached PNGs;
+// no in-browser noise generation or denoising happens here.
+const IMAGES_DIR  = "images/";
+const RESULTS_DIR = "results/";
+// Seeds — must match generate_cache.py's --seeds default.
+const SEEDS = [0, 1, 2, 3, 4];
 
 function computeLinear() {
   const betaMin = 1e-4, betaMax = 0.02;
@@ -683,32 +727,81 @@ const schedules = {
   exponential: Object.assign(computeExponential(), { color: "#fbbf24" }),
 };
 
-let originalImageData = null;
-let originalImageDataSmall = null;
-let noiseBig = null;
-let noiseSmall = null;
+// Runtime state — everything that drives what's on screen.
+let manifest = null;          // populated from RESULTS_DIR + manifest.json
+let activeImageId = null;     // current selection (set after manifest loads)
+let seedIdx = 0;
+let currentSeed = SEEDS[0];
 let currentT = 0;
 let playing = false;
 let playRaf = null;
 let lastFrameTime = 0;
 let playT = 0;
-let currentSeed = (Math.random() * 0xFFFFFFFF) >>> 0;
 
-const uploadInput   = document.getElementById("upload-input");
-const uploadBtn     = document.getElementById("upload-btn");
-const sampleBtn     = document.getElementById("sample-btn");
-const regenNoiseBtn = document.getElementById("regen-noise-btn");
-const seedValEl     = document.getElementById("seed-val");
-const tSlider       = document.getElementById("t-slider");
-const tCurrentEl    = document.getElementById("t-current");
-const tMaxEl        = document.getElementById("t-max");
-const playBtn       = document.getElementById("play-btn");
-const resetBtn      = document.getElementById("reset-btn");
-const panels        = document.querySelectorAll(".panel");
+// In-memory caches.
+//   sourceImageDataCache: imageId -> ImageData (256×256 RGBA from images/<id>.<ext>)
+//                                    used for in-browser forward noising every slider tick.
+//   noiseCache:           seed    -> Float32Array(IMG_SIZE*IMG_SIZE*3) — Gaussian ε.
+//   frameCache:           "<imageId>:<seed>:<schedule>" -> { denoise: [{t,img}, …] }
+//                                    cached PNGs from results/ for the denoise strip.
+const sourceImageDataCache = Object.create(null);
+const noiseCache           = Object.create(null);
+const frameCache           = Object.create(null);
+
+const imageSelectEl  = document.getElementById("image-select");
+const regenNoiseBtn  = document.getElementById("regen-noise-btn");
+const seedValEl      = document.getElementById("seed-val");
+const cacheStatusEl  = document.getElementById("cache-status");
+const tSlider        = document.getElementById("t-slider");
+const tCurrentEl     = document.getElementById("t-current");
+const tMaxEl         = document.getElementById("t-max");
+const playBtn        = document.getElementById("play-btn");
+const resetBtn       = document.getElementById("reset-btn");
+const panels         = document.querySelectorAll(".panel");
 const overviewCanvas = document.getElementById("overview-canvas");
 
 tMaxEl.textContent = T;
 tSlider.max = T;
+
+// Draw an HTMLImage onto a canvas at (w, h) with high-quality smooth scaling.
+// Used for every noisy/final/denoise canvas. With celebahq-256 cache (256×256
+// PNGs) and 256-wide internal canvases there's no scaling at this stage; if a
+// future user runs Python with --frame-size 32 the smooth interpolation still
+// gives the cleanest possible upscale.
+function drawImg(img, canvas, w, h) {
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.clearRect(0, 0, w, h);
+  if (img) ctx.drawImage(img, 0, 0, w, h);
+}
+
+function clearCanvas(canvas) {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// ─── In-browser noise pipeline (forward only) ───────────────────────────────
+// Forward noising x_t = √ᾱ_t·x_0 + √(1-ᾱ_t)·ε is computed in JS so the slider
+// is smooth across all 1000 timesteps (cached PNGs only have 8). The denoise
+// strip still loads from the Python cache — that's where the real model lives.
+//
+// Noise is Mulberry32 + Box-Muller, seeded by the current SEEDS[seedIdx]. JS
+// noise won't pixel-match Python's torch.randn, so the slider's view at
+// t=t_start is "a different sample at the same noise level" as the denoise
+// strip's first frame, not pixel-identical. The schedule comparison and the
+// recovered output are unaffected.
+
+let _rngState = 0;
+function setSeed(seed) { _rngState = seed | 0; }
+function rng() {
+  _rngState = (_rngState + 0x6D2B79F5) | 0;
+  let t = Math.imul(_rngState ^ (_rngState >>> 15), 1 | _rngState);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
 
 function generateNoise(width, height) {
   const len = width * height * 3;
@@ -724,20 +817,27 @@ function generateNoise(width, height) {
   return arr;
 }
 
+function getNoiseFor(seed) {
+  if (noiseCache[seed]) return noiseCache[seed];
+  setSeed(seed);
+  const noise = generateNoise(IMG_SIZE, IMG_SIZE);
+  noiseCache[seed] = noise;
+  return noise;
+}
+
+// Mix x_0 with ε at level ᾱ_t and write the resulting RGBA into dstCanvas.
 function applyNoise(srcData, noise, alphaBar, dstCanvas) {
   const w = srcData.width, h = srcData.height;
-  const ctx = dstCanvas.getContext("2d");
   if (dstCanvas.width !== w) dstCanvas.width = w;
   if (dstCanvas.height !== h) dstCanvas.height = h;
+  const ctx = dstCanvas.getContext("2d");
   const out = ctx.createImageData(w, h);
   const sa = Math.sqrt(Math.max(alphaBar, 0));
   const sn = Math.sqrt(Math.max(1 - alphaBar, 0));
-  const src = srcData.data;
-  const dst = out.data;
+  const src = srcData.data, dst = out.data;
   const N = w * h;
   for (let i = 0; i < N; i++) {
-    const i4 = i * 4;
-    const i3 = i * 3;
+    const i4 = i * 4, i3 = i * 3;
     for (let c = 0; c < 3; c++) {
       const x0 = src[i4 + c] / 127.5 - 1;
       const eps = noise[i3 + c];
@@ -748,6 +848,34 @@ function applyNoise(srcData, noise, alphaBar, dstCanvas) {
     dst[i4 + 3] = 255;
   }
   ctx.putImageData(out, 0, 0);
+}
+
+// Load a source PNG/JPG/etc. from images/<id>.<ext>, cover-fit-crop it to
+// IMG_SIZE × IMG_SIZE, and stash the ImageData for fast forward computation.
+async function loadSourceImageData(imageId) {
+  if (sourceImageDataCache[imageId]) return sourceImageDataCache[imageId];
+
+  let img = null;
+  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+    try { img = await loadImg(IMAGES_DIR + imageId + "." + ext); break; }
+    catch (_) { /* try next */ }
+  }
+  if (!img) throw new Error("source image not found in " + IMAGES_DIR + ": " + imageId);
+
+  const c = document.createElement("canvas");
+  c.width = IMG_SIZE; c.height = IMG_SIZE;
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  const scale = Math.max(IMG_SIZE / img.naturalWidth, IMG_SIZE / img.naturalHeight);
+  const w = img.naturalWidth * scale;
+  const h = img.naturalHeight * scale;
+  ctx.drawImage(img, (IMG_SIZE - w) / 2, (IMG_SIZE - h) / 2, w, h);
+
+  const data = ctx.getImageData(0, 0, IMG_SIZE, IMG_SIZE);
+  sourceImageDataCache[imageId] = data;
+  return data;
 }
 
 function drawCurve(canvas, alphasBar, t, color) {
@@ -996,7 +1124,9 @@ function setT(t) {
 }
 
 function render() {
-  if (!originalImageData) return;
+  if (!manifest || !activeImageId) return;
+  const srcData = sourceImageDataCache[activeImageId];
+
   panels.forEach(panel => {
     const name = panel.dataset.schedule;
     const sched = schedules[name];
@@ -1004,284 +1134,161 @@ function render() {
     const beta = sched.betas[currentT];
     panel.querySelector(".beta-val").textContent = fmt(beta);
     panel.querySelector(".alphabar-val").textContent = fmt(aBar);
-    applyNoise(originalImageData, noiseBig, aBar, panel.querySelector(".noisy-canvas"));
+
+    const noisy  = panel.querySelector(".noisy-canvas");
+    const finalC = panel.querySelector(".final-canvas");
+    if (srcData) {
+      const noise = getNoiseFor(currentSeed);
+      // Forward at slider t — recomputed every render so transitions are smooth
+      // across all 1000 timesteps, not snapped to the 8 cached snapshots.
+      applyNoise(srcData, noise, aBar, noisy);
+      // Final-preview always shows max-noise (t=T) for that schedule.
+      applyNoise(srcData, noise, sched.alphasBar[T], finalC);
+    } else {
+      clearCanvas(noisy); clearCanvas(finalC);
+    }
     drawCurve(panel.querySelector(".curve-canvas"), sched.alphasBar, currentT, sched.color);
-    applyNoise(originalImageDataSmall, noiseSmall, sched.alphasBar[T], panel.querySelector(".final-canvas"));
   });
   drawOverviewChart();
 }
 
-// ─── Denoising (reverse diffusion) ────────────────────────────────────────────
-// Run actual DDPM-style sampling — start from x_T ~ 𝒩(0, I) and step backwards
-// using the closed-form posterior q(x_{t-1} | x_t, x_0) with a perfect-oracle
-// denoiser (i.e. ε̂ = ε*). This is the same Markov chain a trained model
-// approximates; we just substitute the optimal ε prediction at each step so we
-// can run it client-side without shipping model weights.
+// ─── Cached frame rendering (loaded from results/ written by generate_cache.py) ─
+// All forward and denoise PNGs come from the Python pipeline; nothing is
+// computed in the browser. The frontend's only job is to look up the right
+// (image, seed, schedule, kind, t) cell and blit it onto a canvas.
 
-function getX0Float(width, height) {
-  if (!originalImageData) return null;
-  const tmp = document.createElement("canvas");
-  tmp.width = width; tmp.height = height;
-  const tctx = tmp.getContext("2d");
-  const fullCanvas = document.createElement("canvas");
-  fullCanvas.width = IMG_SIZE; fullCanvas.height = IMG_SIZE;
-  fullCanvas.getContext("2d").putImageData(originalImageData, 0, 0);
-  tctx.drawImage(fullCanvas, 0, 0, width, height);
-  const id = tctx.getImageData(0, 0, width, height);
-  const N = width * height;
-  const x0 = new Float32Array(N * 3);
-  for (let i = 0; i < N; i++) {
-    x0[i * 3]     = id.data[i * 4]     / 127.5 - 1;
-    x0[i * 3 + 1] = id.data[i * 4 + 1] / 127.5 - 1;
-    x0[i * 3 + 2] = id.data[i * 4 + 2] / 127.5 - 1;
-  }
-  return x0;
+function refreshSeedDisplay() {
+  if (seedValEl) seedValEl.textContent = String(currentSeed);
 }
 
-function runDenoising(scheduleName) {
-  const sched = schedules[scheduleName];
-  const W = DENOISE_SIZE, H = DENOISE_SIZE, N = W * H, len = N * 3;
-  const x0 = getX0Float(W, H);
-  if (!x0) return [];
-
-  const x = generateNoise(W, H);
-
-  // sampling timesteps: T → 0 with stride
-  const times = [];
-  for (let t = T; t > 0; t -= DENOISE_STRIDE) times.push(t);
-  times.push(0);
-  const numTransitions = times.length - 1;
-
-  const snapStepIdx = new Set();
-  for (let f = 0; f < DENOISE_FRAMES; f++) {
-    snapStepIdx.add(Math.round(numTransitions * f / (DENOISE_FRAMES - 1)));
-  }
-
-  const snapshots = [];
-  if (snapStepIdx.has(0)) {
-    snapshots.push({ t: times[0], data: new Float32Array(x) });
-  }
-
-  for (let s = 0; s < numTransitions; s++) {
-    const t      = times[s];
-    const tPrev  = times[s + 1];
-    const aBar_t = sched.alphasBar[t];
-    const aBar_p = sched.alphasBar[tPrev];
-
-    const sa_t = Math.sqrt(Math.max(aBar_t, 0));
-    const sn_t = Math.sqrt(Math.max(1 - aBar_t, 1e-12));
-    const sa_p = Math.sqrt(Math.max(aBar_p, 0));
-
-    // η=1 stochastic DDIM (matches DDPM marginals when stride=1)
-    let sigmaSq = 0;
-    if (tPrev > 0 && aBar_p > 1e-12) {
-      sigmaSq = (1 - aBar_p) / Math.max(1 - aBar_t, 1e-12) * (1 - aBar_t / aBar_p);
-      if (!isFinite(sigmaSq) || sigmaSq < 0) sigmaSq = 0;
-    }
-    const sigma = Math.sqrt(sigmaSq);
-    const sn_p_dir = Math.sqrt(Math.max(1 - aBar_p - sigmaSq, 0));
-
-    const z = sigma > 0 ? generateNoise(W, H) : null;
-
-    for (let i = 0; i < len; i++) {
-      const eps = (x[i] - sa_t * x0[i]) / sn_t; // oracle ε
-      x[i] = sa_p * x0[i] + sn_p_dir * eps + (z ? sigma * z[i] : 0);
-    }
-
-    if (snapStepIdx.has(s + 1)) {
-      snapshots.push({ t: tPrev, data: new Float32Array(x) });
-    }
-  }
-  return snapshots;
+function setCacheStatus(text, kind) {
+  if (!cacheStatusEl) return;
+  cacheStatusEl.textContent = "cache: " + text;
+  cacheStatusEl.className = "cache-status" + (kind ? " " + kind : "");
 }
 
-function renderDenoiseStrip(scheduleName, snapshots) {
+// Short tag for the status pill describing the denoise mode. img2img with
+// strength<1 starts reverse from a partially-noised version of the source;
+// strength=1 is full unconditional generation from pure noise.
+function img2imgTag() {
+  if (!manifest || manifest.strength == null) return "";
+  const s = manifest.strength;
+  if (s >= 0.999) return "gen · ";
+  return "img2img " + s.toFixed(2) + " (t*=" + manifest.t_start + ") · ";
+}
+
+// Manifest + URL helpers ─────────────────────────────────────────────────────
+function padT(t) { return String(t).padStart(4, "0"); }
+
+function loadImg(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload  = () => resolve(img);
+    img.onerror = () => reject(new Error("load failed: " + url));
+    img.src = url;
+  });
+}
+
+async function fetchManifest() {
+  const url = RESULTS_DIR + "manifest.json";
+  const r = await fetch(url, { cache: "no-cache" });
+  if (!r.ok) throw new Error(url + " — HTTP " + r.status);
+  return r.json();
+}
+
+// Matches generate_cache.py: <image>/<schedule>_schedule_frames/seed_<n>/<kind>_<i>_t<TTTT>.png
+function frameUrl(imageId, scheduleName, seed, kind, idx, t) {
+  return RESULTS_DIR + imageId + "/" + scheduleName + "_schedule_frames/seed_" + seed +
+         "/" + kind + "_" + idx + "_t" + padT(t) + ".png";
+}
+
+// Manifest may emit either:
+//  - new format: denoise_timesteps (img2img with strength<1)
+//  - old format: frame_timesteps (single shared array)
+// Forward timesteps aren't used — forward noising is computed in-browser.
+function denoiseTimesteps() {
+  return (manifest && (manifest.denoise_timesteps || manifest.frame_timesteps)) || [];
+}
+
+// Eagerly load denoise PNGs for this (image, seed) across all schedules.
+// Forward frames are NOT fetched — forward noising is computed in-browser
+// every slider tick for smooth transitions. The Python script still writes
+// forward_*.png alongside denoise_*.png, but the frontend ignores them.
+async function preloadFrames(imageId, seed) {
+  if (!manifest) return;
+  const dnTs = denoiseTimesteps();
+  for (const sched of manifest.schedules) {
+    const key = imageId + ":" + seed + ":" + sched;
+    if (frameCache[key]) continue;
+    const dnReqs = dnTs.map((t, i) => loadImg(frameUrl(imageId, sched, seed, "denoise", i, t)));
+    const dnImgs = await Promise.all(dnReqs);
+    const denoise = dnImgs.map((img, i) => ({ t: dnTs[i], img }));
+    frameCache[key] = { denoise };
+  }
+}
+
+// ─── Denoise strip render ───────────────────────────────────────────────────
+function renderDenoiseStrip(scheduleName, frames) {
   const row = document.querySelector(`.denoise-row[data-schedule="${scheduleName}"]`);
   if (!row) return;
-  const frames = row.querySelectorAll(".denoise-frame");
-  for (let i = 0; i < frames.length; i++) {
-    const frame = frames[i];
-    const canvas = frame.querySelector("canvas");
-    const tLabel = frame.querySelector("span");
-    if (i >= snapshots.length) {
+  const cells = row.querySelectorAll(".denoise-frame");
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    const canvas = cell.querySelector("canvas");
+    const tLabel = cell.querySelector("span");
+    if (i >= frames.length || !frames[i]) {
       tLabel.textContent = "—";
+      clearCanvas(canvas);
       continue;
     }
-    const snap = snapshots[i];
-    if (canvas.width !== DENOISE_SIZE) canvas.width = DENOISE_SIZE;
-    if (canvas.height !== DENOISE_SIZE) canvas.height = DENOISE_SIZE;
-    const ctx = canvas.getContext("2d");
-    const out = ctx.createImageData(DENOISE_SIZE, DENOISE_SIZE);
-    const N = DENOISE_SIZE * DENOISE_SIZE;
-    const data = snap.data;
-    for (let p = 0; p < N; p++) {
-      const p3 = p * 3, p4 = p * 4;
-      for (let c = 0; c < 3; c++) {
-        const v = (data[p3 + c] + 1) * 127.5;
-        out.data[p4 + c] = v < 0 ? 0 : v > 255 ? 255 : v;
-      }
-      out.data[p4 + 3] = 255;
-    }
-    ctx.putImageData(out, 0, 0);
-    tLabel.textContent = "t=" + snap.t;
+    drawImg(frames[i].img, canvas, DENOISE_SIZE, DENOISE_SIZE);
+    tLabel.textContent = "t=" + frames[i].t;
   }
 }
 
 function renderAllDenoising() {
-  if (!originalImageData) return;
-  for (const name of ["linear", "cosine", "exponential"]) {
-    const snaps = runDenoising(name);
-    renderDenoiseStrip(name, snaps);
+  if (!manifest) return;
+  for (const sched of manifest.schedules) {
+    const key = activeImageId + ":" + currentSeed + ":" + sched;
+    const cached = frameCache[key];
+    renderDenoiseStrip(sched, cached ? cached.denoise : []);
   }
 }
 
-function refreshSeedDisplay() {
-  if (seedValEl) seedValEl.textContent = (currentSeed >>> 0);
-}
-
-function applySeed() {
-  setSeed(currentSeed);
-  if (!originalImageData) return;
-  noiseBig   = generateNoise(IMG_SIZE, IMG_SIZE);
-  noiseSmall = generateNoise(FINAL_SIZE, FINAL_SIZE);
+// ─── Selection + seed cycle (both async — load frames before rendering) ─────
+async function selectImage(id) {
+  if (!manifest || !manifest.images.includes(id)) return;
+  activeImageId = id;
+  if (imageSelectEl && imageSelectEl.value !== id) imageSelectEl.value = id;
+  setCacheStatus(id + " · seed " + currentSeed + " · loading…", "loading");
+  try {
+    await Promise.all([preloadFrames(id, currentSeed), loadSourceImageData(id)]);
+    setCacheStatus(id + " · seed " + currentSeed + " · " + img2imgTag() + "ready", "ready");
+  } catch (e) {
+    setCacheStatus("error: " + e.message, "loading");
+    console.error(e);
+  }
   render();
   renderAllDenoising();
 }
 
-function processImage(img) {
-  const canvas = document.createElement("canvas");
-  canvas.width = IMG_SIZE;
-  canvas.height = IMG_SIZE;
-  const ctx = canvas.getContext("2d");
-
-  const imgW = img.width || img.videoWidth || IMG_SIZE;
-  const imgH = img.height || img.videoHeight || IMG_SIZE;
-  // cover-fit crop
-  const scale = Math.max(IMG_SIZE / imgW, IMG_SIZE / imgH);
-  const w = imgW * scale;
-  const h = imgH * scale;
-  const dx = (IMG_SIZE - w) / 2;
-  const dy = (IMG_SIZE - h) / 2;
-  ctx.drawImage(img, dx, dy, w, h);
-  originalImageData = ctx.getImageData(0, 0, IMG_SIZE, IMG_SIZE);
-
-  const sCanvas = document.createElement("canvas");
-  sCanvas.width = FINAL_SIZE;
-  sCanvas.height = FINAL_SIZE;
-  const sCtx = sCanvas.getContext("2d");
-  sCtx.drawImage(canvas, 0, 0, FINAL_SIZE, FINAL_SIZE);
-  originalImageDataSmall = sCtx.getImageData(0, 0, FINAL_SIZE, FINAL_SIZE);
-
-  applySeed();
+async function cycleSeed() {
+  seedIdx = (seedIdx + 1) % SEEDS.length;
+  currentSeed = SEEDS[seedIdx];
+  refreshSeedDisplay();
+  setCacheStatus(activeImageId + " · seed " + currentSeed + " · loading…", "loading");
+  try {
+    await preloadFrames(activeImageId, currentSeed);
+    setCacheStatus(activeImageId + " · seed " + currentSeed + " · " + img2imgTag() + "ready", "ready");
+  } catch (e) {
+    setCacheStatus("error: " + e.message, "loading");
+    console.error(e);
+  }
+  render();
+  renderAllDenoising();
 }
 
-function generateSampleImage() {
-  const canvas = document.createElement("canvas");
-  canvas.width = IMG_SIZE;
-  canvas.height = IMG_SIZE;
-  const ctx = canvas.getContext("2d");
-
-  // sky gradient (sunset)
-  const sky = ctx.createLinearGradient(0, 0, 0, IMG_SIZE * 0.78);
-  sky.addColorStop(0,    "#243f72");
-  sky.addColorStop(0.55, "#cf5a4f");
-  sky.addColorStop(1,    "#f4be6c");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, IMG_SIZE, IMG_SIZE * 0.78);
-
-  // sun
-  const sunX = IMG_SIZE * 0.7, sunY = IMG_SIZE * 0.42, sunR = IMG_SIZE * 0.11;
-  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 1.6);
-  sunGrad.addColorStop(0,    "#fff5b8");
-  sunGrad.addColorStop(0.55, "#ffd169");
-  sunGrad.addColorStop(1,    "rgba(255,160,80,0)");
-  ctx.fillStyle = sunGrad;
-  ctx.beginPath();
-  ctx.arc(sunX, sunY, sunR * 1.6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // distant mountains
-  ctx.fillStyle = "#3d4a6e";
-  ctx.beginPath();
-  ctx.moveTo(0, IMG_SIZE * 0.62);
-  ctx.lineTo(IMG_SIZE * 0.18, IMG_SIZE * 0.42);
-  ctx.lineTo(IMG_SIZE * 0.32, IMG_SIZE * 0.55);
-  ctx.lineTo(IMG_SIZE * 0.5,  IMG_SIZE * 0.38);
-  ctx.lineTo(IMG_SIZE * 0.66, IMG_SIZE * 0.50);
-  ctx.lineTo(IMG_SIZE * 0.84, IMG_SIZE * 0.43);
-  ctx.lineTo(IMG_SIZE,        IMG_SIZE * 0.55);
-  ctx.lineTo(IMG_SIZE,        IMG_SIZE * 0.78);
-  ctx.lineTo(0,               IMG_SIZE * 0.78);
-  ctx.closePath();
-  ctx.fill();
-
-  // closer mountains
-  ctx.fillStyle = "#27314a";
-  ctx.beginPath();
-  ctx.moveTo(0, IMG_SIZE * 0.78);
-  ctx.lineTo(IMG_SIZE * 0.14, IMG_SIZE * 0.55);
-  ctx.lineTo(IMG_SIZE * 0.28, IMG_SIZE * 0.66);
-  ctx.lineTo(IMG_SIZE * 0.45, IMG_SIZE * 0.5);
-  ctx.lineTo(IMG_SIZE * 0.6,  IMG_SIZE * 0.62);
-  ctx.lineTo(IMG_SIZE * 0.78, IMG_SIZE * 0.55);
-  ctx.lineTo(IMG_SIZE,        IMG_SIZE * 0.65);
-  ctx.lineTo(IMG_SIZE,        IMG_SIZE * 0.82);
-  ctx.lineTo(0,               IMG_SIZE * 0.82);
-  ctx.closePath();
-  ctx.fill();
-
-  // water
-  const water = ctx.createLinearGradient(0, IMG_SIZE * 0.82, 0, IMG_SIZE);
-  water.addColorStop(0, "#1f3850");
-  water.addColorStop(1, "#0d1929");
-  ctx.fillStyle = water;
-  ctx.fillRect(0, IMG_SIZE * 0.82, IMG_SIZE, IMG_SIZE * 0.18);
-
-  // sun reflection on water
-  ctx.fillStyle = "rgba(255, 200, 110, 0.32)";
-  ctx.fillRect(IMG_SIZE * 0.65, IMG_SIZE * 0.82, IMG_SIZE * 0.1, IMG_SIZE * 0.16);
-
-  // foreground trees
-  ctx.fillStyle = "#0f1a2a";
-  for (let i = 0; i < 5; i++) {
-    const x = IMG_SIZE * (0.07 + 0.2 * i);
-    ctx.beginPath();
-    ctx.moveTo(x, IMG_SIZE * 0.78);
-    ctx.lineTo(x - 7, IMG_SIZE * 0.88);
-    ctx.lineTo(x + 7, IMG_SIZE * 0.88);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // birds
-  ctx.strokeStyle = "#1d2530";
-  ctx.lineWidth = 1.5;
-  ctx.lineCap = "round";
-  for (const [bx, by] of [[60, 70], [85, 60], [110, 75]]) {
-    ctx.beginPath();
-    ctx.moveTo(bx - 6, by);
-    ctx.quadraticCurveTo(bx - 3, by - 4, bx, by);
-    ctx.quadraticCurveTo(bx + 3, by - 4, bx + 6, by);
-    ctx.stroke();
-  }
-
-  return canvas;
-}
-
-sampleBtn.addEventListener("click", () => processImage(generateSampleImage()));
-
-uploadBtn.addEventListener("click", () => uploadInput.click());
-uploadInput.addEventListener("change", (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    const img = new Image();
-    img.onload = () => processImage(img);
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
-});
+imageSelectEl.addEventListener("change", (e) => selectImage(e.target.value));
 
 tSlider.addEventListener("input", () => setT(parseInt(tSlider.value, 10)));
 
@@ -1312,11 +1319,7 @@ function pause() {
 playBtn.addEventListener("click", () => { playing ? pause() : play(); });
 resetBtn.addEventListener("click", () => { pause(); setT(0); });
 
-regenNoiseBtn.addEventListener("click", () => {
-  currentSeed = (Math.random() * 0xFFFFFFFF) >>> 0;
-  refreshSeedDisplay();
-  applySeed();
-});
+regenNoiseBtn.addEventListener("click", cycleSeed);
 
 // keyboard: space = play/pause, arrows = step
 window.addEventListener("keydown", (e) => {
@@ -1326,11 +1329,29 @@ window.addEventListener("keydown", (e) => {
   else if (e.code === "ArrowRight") { pause(); setT(currentT + (e.shiftKey ? 50 : 10)); }
 });
 
-window.addEventListener("load", () => {
+async function init() {
   refreshSeedDisplay();
-  processImage(generateSampleImage());
-});
-window.addEventListener("resize", () => { if (originalImageData) render(); });
+  setCacheStatus("loading manifest…", "loading");
+  try {
+    manifest = await fetchManifest();
+  } catch (e) {
+    setCacheStatus("manifest not found at " + RESULTS_DIR + "manifest.json — run generate_cache.py first", "loading");
+    console.warn("[diffusion-viz]", e.message);
+    return;
+  }
+  // Populate the dropdown from manifest.images (file names from images/ minus extension).
+  imageSelectEl.innerHTML = manifest.images.map(id =>
+    `<option value="${id}">${id}</option>`
+  ).join("");
+  imageSelectEl.disabled = false;
+  regenNoiseBtn.disabled = false;
+  activeImageId = manifest.images[0];
+  imageSelectEl.value = activeImageId;
+  await selectImage(activeImageId);
+}
+
+window.addEventListener("load", init);
+window.addEventListener("resize", () => { if (manifest) render(); });
 </script>
 </body>
 </html>

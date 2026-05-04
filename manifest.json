@@ -1,0 +1,36 @@
+{
+  "model": "google/ddpm-cifar10-32",
+  "model_native_size": 32,
+  "frame_size": 96,
+  "T": 1000,
+  "stride": 20,
+  "frames_per_trajectory": 8,
+  "frame_timesteps": [
+    1000,
+    860,
+    720,
+    580,
+    420,
+    280,
+    140,
+    0
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "schedules": [
+    "linear",
+    "cosine",
+    "exponential"
+  ],
+  "images": [
+    "sunset",
+    "geometric",
+    "cat",
+    "city"
+  ]
+}

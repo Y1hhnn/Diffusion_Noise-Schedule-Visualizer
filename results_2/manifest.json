@@ -1,0 +1,50 @@
+{
+  "model": "google/ddpm-celebahq-256",
+  "model_native_size": 256,
+  "frame_size": 256,
+  "T": 1000,
+  "num_steps": 100,
+  "eta": 0.0,
+  "strength": 0.7,
+  "t_start": 700,
+  "frames_per_trajectory": 8,
+  "forward_timesteps": [
+    1000,
+    857,
+    714,
+    571,
+    429,
+    286,
+    143,
+    0
+  ],
+  "denoise_timesteps": [
+    700,
+    602,
+    497,
+    399,
+    301,
+    203,
+    98,
+    0
+  ],
+  "forward_filename": "forward_{i}_t{t:04d}.png",
+  "denoise_filename": "denoise_{i}_t{t:04d}.png",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "schedules": [
+    "linear",
+    "cosine",
+    "exponential"
+  ],
+  "images": [
+    "fig1",
+    "fig2"
+  ],
+  "pipeline": "shared \u03b5 per (image, schedule, seed): forward x_t = \u221a\u1fb1_t\u00b7x_0 + \u221a(1-\u1fb1_t)\u00b7\u03b5 for t \u2208 [0, T] (display); reverse (img2img) starts from x_{700} and runs \u03b7=0.0 DDIM, 100 steps \u2192 0; strength=0.7"
+}
