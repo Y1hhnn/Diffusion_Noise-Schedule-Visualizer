@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diffusion Noise Schedule Visualizer</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --bg-soft: #14171f;
+  --bg-panel: #1a1d27;
+  --border: #2a2f3d;
+  --text: #e8eaef;
+  --text-dim: #9ca3af;
+  --text-muted: #6b7280;
+  --accent: #818cf8;
+  --linear: #60a5fa;
+  --cosine: #34d399;
+  --exponential: #fbbf24;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+  line-height: 1.55;
+  font-size: 15px;
+}
+
+body { padding: 28px 20px 60px; min-height: 100vh; }
+
+.container { max-width: 1200px; margin: 0 auto; }
+
+header { text-align: center; margin-bottom: 26px; }
+
+h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-bottom: 18px;
+}
+
+.formula-box {
+  display: inline-block;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 22px;
+  max-width: 760px;
+  text-align: left;
+}
+
+.formula {
+  font-family: "STIX Two Math", "Cambria Math", "Times New Roman", serif;
+  font-size: 22px;
+  color: var(--accent);
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.formula-explain { color: var(--text-dim); font-size: 13px; }
+
+.controls {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.image-controls { display: flex; gap: 10px; }
+
+button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+button:hover { background: #1f2330; border-color: #353a4b; }
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0f1117;
+}
+
+button.primary:hover { background: #6f7af0; border-color: #6f7af0; }
+
+.time-controls {
+  flex: 1;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.slider-row { display: flex; align-items: center; gap: 12px; }
+
+.t-label { color: var(--text-dim); font-size: 13px; flex-shrink: 0; }
+
+.t-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text);
+  min-width: 88px;
+  flex-shrink: 0;
+  font-family: ui-monospace, "SF Mono", monospace;
+}
+
+input[type="range"] {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s;
+  border: none;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px; height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.action-row { display: flex; gap: 10px; align-items: center; }
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+@media (max-width: 920px) { .schedule-grid { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+
+.panel[data-schedule="linear"]::before { background: var(--linear); }
+.panel[data-schedule="cosine"]::before { background: var(--cosine); }
+.panel[data-schedule="exponential"]::before { background: var(--exponential); }
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.panel h2 { font-size: 15px; font-weight: 600; }
+
+.panel[data-schedule="linear"] h2 { color: var(--linear); }
+.panel[data-schedule="cosine"] h2 { color: var(--cosine); }
+.panel[data-schedule="exponential"] h2 { color: var(--exponential); }
+
+.panel-metrics {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  font-family: ui-monospace, "SF Mono", monospace;
+  color: var(--text-muted);
+}
+
+.panel-metrics span span {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+canvas.noisy-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 8px;
+  background: #0a0c12;
+}
+
+canvas.curve-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2.4 / 1;
+  background: var(--bg-soft);
+  border-radius: 6px;
+}
+
+.final-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-soft);
+  border-radius: 6px;
+}
+
+.final-preview canvas {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #0a0c12;
+}
+
+.preview-info {
+  flex: 1;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.preview-info b { color: var(--text); font-weight: 500; }
+
+.panel-explain {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.insight {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.insight h3 {
+  font-size: 12px;
+  margin-bottom: 8px;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.insight p {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.insight strong { color: var(--text); font-weight: 500; }
+
+.linear-text { color: var(--linear); font-weight: 500; }
+.cosine-text { color: var(--cosine); font-weight: 500; }
+.exponential-text { color: var(--exponential); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Diffusion Noise Schedule Visualizer</h1>
+    <p class="subtitle">See how Linear, Cosine, and Exponential schedules corrupt the same image differently as t grows.</p>
+    <div class="formula-box">
+      <div class="formula">x<sub>t</sub> = √ᾱ<sub>t</sub> · x<sub>0</sub> + √(1 − ᾱ<sub>t</sub>) · ε</div>
+      <p class="formula-explain">Forward diffusion mixes the image x<sub>0</sub> with Gaussian noise ε ∼ 𝒩(0, I). Signal retention <b>ᾱ<sub>t</sub></b> drops from 1 → 0 as t grows; per-step noise level <b>β<sub>t</sub></b> defines how fast.</p>
+    </div>
+  </header>
+
+  <section class="controls">
+    <div class="image-controls">
+      <input type="file" id="upload-input" accept="image/*" hidden>
+      <button id="upload-btn">Upload Image</button>
+      <button id="sample-btn" class="primary">Use Sample Image</button>
+    </div>
+    <div class="time-controls">
+      <div class="slider-row">
+        <span class="t-label">Timestep:</span>
+        <span class="t-value"><span id="t-current">0</span> / <span id="t-max">1000</span></span>
+        <input type="range" id="t-slider" min="0" max="1000" value="0">
+      </div>
+      <div class="action-row">
+        <button id="play-btn">▶ Play</button>
+        <button id="reset-btn">↺ Reset</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="schedule-grid">
+    <div class="panel" data-schedule="linear">
+      <div class="panel-header">
+        <h2>Linear</h2>
+        <div class="panel-metrics">
+          <span>β<sub>t</sub>=<span class="beta-val">—</span></span>
+          <span>ᾱ<sub>t</sub>=<span class="alphabar-val">—</span></span>
+        </div>
+      </div>
+      <canvas class="noisy-canvas" width="256" height="256"></canvas>
+      <canvas class="curve-canvas"></canvas>
+      <div class="final-preview">
+        <canvas class="final-canvas" width="56" height="56"></canvas>
+        <div class="preview-info"><b>at t = T</b> · final corruption</div>
+      </div>
+      <p class="panel-explain">β<sub>t</sub> grows linearly from β<sub>min</sub> to β<sub>max</sub>. From DDPM (Ho et al., 2020). Simple and steady, but the cumulative signal ᾱ<sub>t</sub> drops relatively fast through the middle of the schedule.</p>
+    </div>
+
+    <div class="panel" data-schedule="cosine">
+      <div class="panel-header">
+        <h2>Cosine</h2>
+        <div class="panel-metrics">
+          <span>β<sub>t</sub>=<span class="beta-val">—</span></span>
+          <span>ᾱ<sub>t</sub>=<span class="alphabar-val">—</span></span>
+        </div>
+      </div>
+      <canvas class="noisy-canvas" width="256" height="256"></canvas>
+      <canvas class="curve-canvas"></canvas>
+      <div class="final-preview">
+        <canvas class="final-canvas" width="56" height="56"></canvas>
+        <div class="preview-info"><b>at t = T</b> · final corruption</div>
+      </div>
+      <p class="panel-explain">ᾱ<sub>t</sub> follows a smooth cosine curve. From Improved DDPM (Nichol & Dhariwal, 2021). It preserves visible structure longer at low and mid timesteps, then transitions smoothly toward noise.</p>
+    </div>
+
+    <div class="panel" data-schedule="exponential">
+      <div class="panel-header">
+        <h2>Exponential</h2>
+        <div class="panel-metrics">
+          <span>β<sub>t</sub>=<span class="beta-val">—</span></span>
+          <span>ᾱ<sub>t</sub>=<span class="alphabar-val">—</span></span>
+        </div>
+      </div>
+      <canvas class="noisy-canvas" width="256" height="256"></canvas>
+      <canvas class="curve-canvas"></canvas>
+      <div class="final-preview">
+        <canvas class="final-canvas" width="56" height="56"></canvas>
+        <div class="preview-info"><b>at t = T</b> · final corruption</div>
+      </div>
+      <p class="panel-explain">This demo uses a custom exponential-style ᾱ<sub>t</sub> curve. Corruption stays gentle for most of the schedule, then accelerates sharply near t=T — a clear late-collapse contrast to linear and cosine.</p>
+    </div>
+  </section>
+
+  <footer class="insight">
+    <h3>Key Insight</h3>
+    <p>At the <strong>same timestep</strong>, each schedule retains a different amount of original signal. <span class="linear-text">Linear</span> steadily reduces signal under the classic DDPM-style β schedule. <span class="cosine-text">Cosine</span> preserves structure longer through a smoother curve. <span class="exponential-text">Exponential</span> is configured here as a late-collapse schedule: the image stays readable for longer, then rapidly becomes noise near the end. The schedule choice directly shapes what the model sees and learns at each timestep.</p>
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+const T = 1000;
+const IMG_SIZE = 256;
+const FINAL_SIZE = 56;
+
+function computeLinear() {
+  const betaMin = 1e-4, betaMax = 0.02;
+  const betas = new Float64Array(T + 1);
+  const alphasBar = new Float64Array(T + 1);
+  alphasBar[0] = 1;
+  for (let t = 1; t <= T; t++) {
+    betas[t] = betaMin + (betaMax - betaMin) * (t - 1) / (T - 1);
+    alphasBar[t] = alphasBar[t - 1] * (1 - betas[t]);
+  }
+  return { betas, alphasBar };
+}
+
+function computeCosine() {
+  const s = 0.008;
+  const betas = new Float64Array(T + 1);
+  const alphasBar = new Float64Array(T + 1);
+  const f0 = Math.cos((s / (1 + s)) * Math.PI / 2) ** 2;
+  for (let t = 0; t <= T; t++) {
+    const f_t = Math.cos(((t / T + s) / (1 + s)) * Math.PI / 2) ** 2;
+    alphasBar[t] = f_t / f0;
+  }
+  betas[0] = 0;
+  for (let t = 1; t <= T; t++) {
+    const beta = 1 - alphasBar[t] / Math.max(alphasBar[t - 1], 1e-12);
+    betas[t] = Math.min(Math.max(beta, 0), 0.999);
+  }
+  return { betas, alphasBar };
+}
+
+function computeExponential() {
+  const lambda = 12;
+  const gamma = 4;
+  const betas = new Float64Array(T + 1);
+  const alphasBar = new Float64Array(T + 1);
+  alphasBar[0] = 1;
+  betas[0] = 0;
+  for (let t = 1; t <= T; t++) {
+    const progress = t / T;
+    alphasBar[t] = Math.exp(-lambda * progress ** gamma);
+    const beta = 1 - alphasBar[t] / Math.max(alphasBar[t - 1], 1e-12);
+    betas[t] = Math.min(Math.max(beta, 0), 0.999);
+  }
+  return { betas, alphasBar };
+}
+
+const schedules = {
+  linear:      Object.assign(computeLinear(),      { color: "#60a5fa" }),
+  cosine:      Object.assign(computeCosine(),      { color: "#34d399" }),
+  exponential: Object.assign(computeExponential(), { color: "#fbbf24" }),
+};
+
+let originalImageData = null;
+let originalImageDataSmall = null;
+let noiseBig = null;
+let noiseSmall = null;
+let currentT = 0;
+let playing = false;
+let playRaf = null;
+let lastFrameTime = 0;
+let playT = 0;
+
+const uploadInput = document.getElementById("upload-input");
+const uploadBtn   = document.getElementById("upload-btn");
+const sampleBtn   = document.getElementById("sample-btn");
+const tSlider     = document.getElementById("t-slider");
+const tCurrentEl  = document.getElementById("t-current");
+const tMaxEl      = document.getElementById("t-max");
+const playBtn     = document.getElementById("play-btn");
+const resetBtn    = document.getElementById("reset-btn");
+const panels      = document.querySelectorAll(".panel");
+
+tMaxEl.textContent = T;
+tSlider.max = T;
+
+function generateNoise(width, height) {
+  const len = width * height * 3;
+  const arr = new Float32Array(len);
+  for (let i = 0; i < len; i += 2) {
+    let u1 = Math.random(); while (u1 === 0) u1 = Math.random();
+    const u2 = Math.random();
+    const r = Math.sqrt(-2 * Math.log(u1));
+    const theta = 2 * Math.PI * u2;
+    arr[i] = r * Math.cos(theta);
+    if (i + 1 < len) arr[i + 1] = r * Math.sin(theta);
+  }
+  return arr;
+}
+
+function applyNoise(srcData, noise, alphaBar, dstCanvas) {
+  const w = srcData.width, h = srcData.height;
+  const ctx = dstCanvas.getContext("2d");
+  if (dstCanvas.width !== w) dstCanvas.width = w;
+  if (dstCanvas.height !== h) dstCanvas.height = h;
+  const out = ctx.createImageData(w, h);
+  const sa = Math.sqrt(Math.max(alphaBar, 0));
+  const sn = Math.sqrt(Math.max(1 - alphaBar, 0));
+  const src = srcData.data;
+  const dst = out.data;
+  const N = w * h;
+  for (let i = 0; i < N; i++) {
+    const i4 = i * 4;
+    const i3 = i * 3;
+    for (let c = 0; c < 3; c++) {
+      const x0 = src[i4 + c] / 127.5 - 1;
+      const eps = noise[i3 + c];
+      const xt = sa * x0 + sn * eps;
+      const v = (xt + 1) * 127.5;
+      dst[i4 + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+    }
+    dst[i4 + 3] = 255;
+  }
+  ctx.putImageData(out, 0, 0);
+}
+
+function drawCurve(canvas, alphasBar, t, color) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth;
+  const cssH = canvas.clientHeight;
+  if (cssW < 4 || cssH < 4) return;
+  const targetW = Math.round(cssW * dpr);
+  const targetH = Math.round(cssH * dpr);
+  if (canvas.width !== targetW || canvas.height !== targetH) {
+    canvas.width = targetW;
+    canvas.height = targetH;
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const padL = 32, padR = 12, padT = 10, padB = 22;
+  const innerW = cssW - padL - padR;
+  const innerH = cssH - padT - padB;
+
+  // grid lines
+  ctx.strokeStyle = "#262a36";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (i / 4) * innerH;
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(padL + innerW, y);
+    ctx.stroke();
+  }
+
+  // labels
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.textAlign = "right";
+  ctx.fillText("1.0", padL - 4, padT + 4);
+  ctx.fillText("0.5", padL - 4, padT + innerH / 2 + 3);
+  ctx.fillText("0.0", padL - 4, padT + innerH + 3);
+  ctx.textAlign = "left";
+  ctx.fillText("t=0", padL, cssH - 6);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#9ca3af";
+  ctx.fillText("signal retention", padL + innerW / 2, cssH - 6);
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#6b7280";
+  ctx.fillText("t=T", padL + innerW, cssH - 6);
+
+  ctx.save();
+  ctx.translate(10, padT + innerH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#9ca3af";
+  ctx.font = "11px ui-monospace, monospace";
+  ctx.fillText("ᾱ_t", 0, 0);
+  ctx.restore();
+
+  // filled area under the signal-retention curve
+  ctx.beginPath();
+  for (let i = 0; i <= T; i += 2) {
+    const x = padL + (i / T) * innerW;
+    const y = padT + (1 - alphasBar[i]) * innerH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineTo(padL + innerW, padT + innerH);
+  ctx.lineTo(padL, padT + innerH);
+  ctx.closePath();
+  ctx.fillStyle = color + "22";
+  ctx.fill();
+
+  // curve line
+  ctx.beginPath();
+  for (let i = 0; i <= T; i += 2) {
+    const x = padL + (i / T) * innerW;
+    const y = padT + (1 - alphasBar[i]) * innerH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+
+  // current position indicator
+  const dx = padL + (t / T) * innerW;
+  const dy = padT + (1 - alphasBar[t]) * innerH;
+  ctx.strokeStyle = "#9ca3af66";
+  ctx.setLineDash([2, 3]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(dx, padT);
+  ctx.lineTo(dx, padT + innerH);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  ctx.arc(dx, dy, 5, 0, Math.PI * 2);
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function fmt(x) {
+  if (x === 0) return "0.0000";
+  const a = Math.abs(x);
+  if (a >= 1e-3) return x.toFixed(4);
+  return x.toExponential(2);
+}
+
+function setT(t) {
+  currentT = Math.max(0, Math.min(T, Math.round(t)));
+  tSlider.value = currentT;
+  tCurrentEl.textContent = currentT;
+  render();
+}
+
+function render() {
+  if (!originalImageData) return;
+  panels.forEach(panel => {
+    const name = panel.dataset.schedule;
+    const sched = schedules[name];
+    const aBar = sched.alphasBar[currentT];
+    const beta = sched.betas[currentT];
+    panel.querySelector(".beta-val").textContent = fmt(beta);
+    panel.querySelector(".alphabar-val").textContent = fmt(aBar);
+    applyNoise(originalImageData, noiseBig, aBar, panel.querySelector(".noisy-canvas"));
+    drawCurve(panel.querySelector(".curve-canvas"), sched.alphasBar, currentT, sched.color);
+    applyNoise(originalImageDataSmall, noiseSmall, sched.alphasBar[T], panel.querySelector(".final-canvas"));
+  });
+}
+
+function processImage(img) {
+  const canvas = document.createElement("canvas");
+  canvas.width = IMG_SIZE;
+  canvas.height = IMG_SIZE;
+  const ctx = canvas.getContext("2d");
+
+  const imgW = img.width || img.videoWidth || IMG_SIZE;
+  const imgH = img.height || img.videoHeight || IMG_SIZE;
+  // cover-fit crop
+  const scale = Math.max(IMG_SIZE / imgW, IMG_SIZE / imgH);
+  const w = imgW * scale;
+  const h = imgH * scale;
+  const dx = (IMG_SIZE - w) / 2;
+  const dy = (IMG_SIZE - h) / 2;
+  ctx.drawImage(img, dx, dy, w, h);
+  originalImageData = ctx.getImageData(0, 0, IMG_SIZE, IMG_SIZE);
+
+  const sCanvas = document.createElement("canvas");
+  sCanvas.width = FINAL_SIZE;
+  sCanvas.height = FINAL_SIZE;
+  const sCtx = sCanvas.getContext("2d");
+  sCtx.drawImage(canvas, 0, 0, FINAL_SIZE, FINAL_SIZE);
+  originalImageDataSmall = sCtx.getImageData(0, 0, FINAL_SIZE, FINAL_SIZE);
+
+  noiseBig = generateNoise(IMG_SIZE, IMG_SIZE);
+  noiseSmall = generateNoise(FINAL_SIZE, FINAL_SIZE);
+  render();
+}
+
+function generateSampleImage() {
+  const canvas = document.createElement("canvas");
+  canvas.width = IMG_SIZE;
+  canvas.height = IMG_SIZE;
+  const ctx = canvas.getContext("2d");
+
+  // sky gradient (sunset)
+  const sky = ctx.createLinearGradient(0, 0, 0, IMG_SIZE * 0.78);
+  sky.addColorStop(0,    "#243f72");
+  sky.addColorStop(0.55, "#cf5a4f");
+  sky.addColorStop(1,    "#f4be6c");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, IMG_SIZE, IMG_SIZE * 0.78);
+
+  // sun
+  const sunX = IMG_SIZE * 0.7, sunY = IMG_SIZE * 0.42, sunR = IMG_SIZE * 0.11;
+  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 1.6);
+  sunGrad.addColorStop(0,    "#fff5b8");
+  sunGrad.addColorStop(0.55, "#ffd169");
+  sunGrad.addColorStop(1,    "rgba(255,160,80,0)");
+  ctx.fillStyle = sunGrad;
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, sunR * 1.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // distant mountains
+  ctx.fillStyle = "#3d4a6e";
+  ctx.beginPath();
+  ctx.moveTo(0, IMG_SIZE * 0.62);
+  ctx.lineTo(IMG_SIZE * 0.18, IMG_SIZE * 0.42);
+  ctx.lineTo(IMG_SIZE * 0.32, IMG_SIZE * 0.55);
+  ctx.lineTo(IMG_SIZE * 0.5,  IMG_SIZE * 0.38);
+  ctx.lineTo(IMG_SIZE * 0.66, IMG_SIZE * 0.50);
+  ctx.lineTo(IMG_SIZE * 0.84, IMG_SIZE * 0.43);
+  ctx.lineTo(IMG_SIZE,        IMG_SIZE * 0.55);
+  ctx.lineTo(IMG_SIZE,        IMG_SIZE * 0.78);
+  ctx.lineTo(0,               IMG_SIZE * 0.78);
+  ctx.closePath();
+  ctx.fill();
+
+  // closer mountains
+  ctx.fillStyle = "#27314a";
+  ctx.beginPath();
+  ctx.moveTo(0, IMG_SIZE * 0.78);
+  ctx.lineTo(IMG_SIZE * 0.14, IMG_SIZE * 0.55);
+  ctx.lineTo(IMG_SIZE * 0.28, IMG_SIZE * 0.66);
+  ctx.lineTo(IMG_SIZE * 0.45, IMG_SIZE * 0.5);
+  ctx.lineTo(IMG_SIZE * 0.6,  IMG_SIZE * 0.62);
+  ctx.lineTo(IMG_SIZE * 0.78, IMG_SIZE * 0.55);
+  ctx.lineTo(IMG_SIZE,        IMG_SIZE * 0.65);
+  ctx.lineTo(IMG_SIZE,        IMG_SIZE * 0.82);
+  ctx.lineTo(0,               IMG_SIZE * 0.82);
+  ctx.closePath();
+  ctx.fill();
+
+  // water
+  const water = ctx.createLinearGradient(0, IMG_SIZE * 0.82, 0, IMG_SIZE);
+  water.addColorStop(0, "#1f3850");
+  water.addColorStop(1, "#0d1929");
+  ctx.fillStyle = water;
+  ctx.fillRect(0, IMG_SIZE * 0.82, IMG_SIZE, IMG_SIZE * 0.18);
+
+  // sun reflection on water
+  ctx.fillStyle = "rgba(255, 200, 110, 0.32)";
+  ctx.fillRect(IMG_SIZE * 0.65, IMG_SIZE * 0.82, IMG_SIZE * 0.1, IMG_SIZE * 0.16);
+
+  // foreground trees
+  ctx.fillStyle = "#0f1a2a";
+  for (let i = 0; i < 5; i++) {
+    const x = IMG_SIZE * (0.07 + 0.2 * i);
+    ctx.beginPath();
+    ctx.moveTo(x, IMG_SIZE * 0.78);
+    ctx.lineTo(x - 7, IMG_SIZE * 0.88);
+    ctx.lineTo(x + 7, IMG_SIZE * 0.88);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // birds
+  ctx.strokeStyle = "#1d2530";
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = "round";
+  for (const [bx, by] of [[60, 70], [85, 60], [110, 75]]) {
+    ctx.beginPath();
+    ctx.moveTo(bx - 6, by);
+    ctx.quadraticCurveTo(bx - 3, by - 4, bx, by);
+    ctx.quadraticCurveTo(bx + 3, by - 4, bx + 6, by);
+    ctx.stroke();
+  }
+
+  return canvas;
+}
+
+sampleBtn.addEventListener("click", () => processImage(generateSampleImage()));
+
+uploadBtn.addEventListener("click", () => uploadInput.click());
+uploadInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => processImage(img);
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+tSlider.addEventListener("input", () => setT(parseInt(tSlider.value, 10)));
+
+function play() {
+  playing = true;
+  playBtn.textContent = "⏸ Pause";
+  if (currentT >= T) currentT = 0;
+  playT = currentT;
+  lastFrameTime = performance.now();
+  function tick(now) {
+    if (!playing) return;
+    const dt = (now - lastFrameTime) / 1000;
+    lastFrameTime = now;
+    playT += dt * (T / 8); // sweep over 8 seconds
+    if (playT >= T) { setT(T); pause(); return; }
+    setT(playT);
+    playRaf = requestAnimationFrame(tick);
+  }
+  playRaf = requestAnimationFrame(tick);
+}
+
+function pause() {
+  playing = false;
+  playBtn.textContent = "▶ Play";
+  if (playRaf) { cancelAnimationFrame(playRaf); playRaf = null; }
+}
+
+playBtn.addEventListener("click", () => { playing ? pause() : play(); });
+resetBtn.addEventListener("click", () => { pause(); setT(0); });
+
+// keyboard: space = play/pause, arrows = step
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); playing ? pause() : play(); }
+  else if (e.code === "ArrowLeft")  { pause(); setT(currentT - (e.shiftKey ? 50 : 10)); }
+  else if (e.code === "ArrowRight") { pause(); setT(currentT + (e.shiftKey ? 50 : 10)); }
+});
+
+window.addEventListener("load",  () => processImage(generateSampleImage()));
+window.addEventListener("resize", () => { if (originalImageData) render(); });
+</script>
+</body>
+</html>
