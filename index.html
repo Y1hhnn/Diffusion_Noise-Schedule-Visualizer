@@ -299,6 +299,166 @@ canvas.curve-canvas {
 .linear-text { color: var(--linear); font-weight: 500; }
 .cosine-text { color: var(--cosine); font-weight: 500; }
 .exponential-text { color: var(--exponential); font-weight: 500; }
+
+.seed-info {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: ui-monospace, "SF Mono", monospace;
+  white-space: nowrap;
+  align-self: center;
+}
+
+.seed-info span {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px 12px;
+  margin-bottom: 22px;
+}
+
+.overview-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 10px;
+}
+
+.overview-header h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.overview-header p {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  flex: 1 1 360px;
+  margin: 0;
+}
+
+canvas.overview-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 1;
+  background: var(--bg-soft);
+  border-radius: 6px;
+}
+
+@media (max-width: 720px) {
+  canvas.overview-canvas { aspect-ratio: 2.4 / 1; }
+}
+
+.denoise-section {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px 18px;
+  margin-bottom: 22px;
+}
+
+.denoise-header { margin-bottom: 12px; }
+
+.denoise-header h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.denoise-explain {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.denoise-explain code {
+  background: var(--bg-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.denoise-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.denoise-row:first-of-type { border-top: none; padding-top: 4px; }
+.denoise-row:last-of-type  { padding-bottom: 0; }
+
+.denoise-row-label {
+  flex: 0 0 96px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.denoise-row[data-schedule="linear"]      .denoise-row-label { color: var(--linear); }
+.denoise-row[data-schedule="cosine"]      .denoise-row-label { color: var(--cosine); }
+.denoise-row[data-schedule="exponential"] .denoise-row-label { color: var(--exponential); }
+
+.denoise-row-label small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+.denoise-strip {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  min-width: 0;
+}
+
+.denoise-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+
+.denoise-frame canvas {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 4px;
+  background: #0a0c12;
+}
+
+.denoise-frame span {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.denoise-arrow {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 720px) {
+  .denoise-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .denoise-row-label { flex: 0 0 auto; }
+}
 </style>
 </head>
 <body>
@@ -317,6 +477,8 @@ canvas.curve-canvas {
       <input type="file" id="upload-input" accept="image/*" hidden>
       <button id="upload-btn">Upload Image</button>
       <button id="sample-btn" class="primary">Use Sample Image</button>
+      <button id="regen-noise-btn" title="Sample fresh ε ~ 𝒩(0, I)">↻ Regenerate Noise</button>
+      <span class="seed-info">seed <span id="seed-val">—</span></span>
     </div>
     <div class="time-controls">
       <div class="slider-row">
@@ -329,6 +491,14 @@ canvas.curve-canvas {
         <button id="reset-btn">↺ Reset</button>
       </div>
     </div>
+  </section>
+
+  <section class="overview-card">
+    <div class="overview-header">
+      <h2>Overview · Signal Retention (ᾱ<sub>t</sub>)</h2>
+      <p>All three schedules at a glance: <span class="linear-text">Linear</span> drops fastest in the middle, <span class="cosine-text">Cosine</span> stays smoother throughout, <span class="exponential-text">Exponential</span> holds high signal early then collapses sharply near t=T.</p>
+    </div>
+    <canvas class="overview-canvas" id="overview-canvas"></canvas>
   </section>
 
   <section class="schedule-grid">
@@ -384,6 +554,58 @@ canvas.curve-canvas {
     </div>
   </section>
 
+  <section class="denoise-section">
+    <div class="denoise-header">
+      <h2>Denoising · Reverse Diffusion (DDPM Sampling)</h2>
+      <p class="denoise-explain">
+        Starting from pure noise <code>x<sub>T</sub> ~ 𝒩(0, I)</code>, step backwards using the posterior
+        <code>q(x<sub>t-1</sub> | x<sub>t</sub>, x<sub>0</sub>)</code> with a perfect-oracle denoiser
+        (i.e. <code>ε̂ = ε*</code>). This is the actual sampling algorithm a trained diffusion model
+        approximates — watch the same image emerge from noise under each schedule.
+      </p>
+    </div>
+    <div class="denoise-row" data-schedule="linear">
+      <div class="denoise-row-label">Linear<small>DDPM</small></div>
+      <div class="denoise-strip">
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+      </div>
+    </div>
+    <div class="denoise-row" data-schedule="cosine">
+      <div class="denoise-row-label">Cosine<small>iDDPM</small></div>
+      <div class="denoise-strip">
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+      </div>
+    </div>
+    <div class="denoise-row" data-schedule="exponential">
+      <div class="denoise-row-label">Exponential<small>late-collapse</small></div>
+      <div class="denoise-strip">
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+        <div class="denoise-frame"><canvas></canvas><span>—</span></div>
+      </div>
+    </div>
+    <div class="denoise-arrow">noise · t = T  ────────────────────────────►  recovered · t = 0</div>
+  </section>
+
   <footer class="insight">
     <h3>Key Insight</h3>
     <p>At the <strong>same timestep</strong>, each schedule retains a different amount of original signal. <span class="linear-text">Linear</span> steadily reduces signal under the classic DDPM-style β schedule. <span class="cosine-text">Cosine</span> preserves structure longer through a smoother curve. <span class="exponential-text">Exponential</span> is configured here as a late-collapse schedule: the image stays readable for longer, then rapidly becomes noise near the end. The schedule choice directly shapes what the model sees and learns at each timestep.</p>
@@ -396,6 +618,19 @@ canvas.curve-canvas {
 const T = 1000;
 const IMG_SIZE = 256;
 const FINAL_SIZE = 56;
+const DENOISE_SIZE = 96;
+const DENOISE_FRAMES = 8;
+const DENOISE_STRIDE = 20;
+
+// Seedable PRNG (Mulberry32) so noise is reproducible from the seed shown in the UI
+let _rngState = 0;
+function setSeed(seed) { _rngState = seed | 0; }
+function rng() {
+  _rngState = (_rngState + 0x6D2B79F5) | 0;
+  let t = Math.imul(_rngState ^ (_rngState >>> 15), 1 | _rngState);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
 
 function computeLinear() {
   const betaMin = 1e-4, betaMax = 0.02;
@@ -457,16 +692,20 @@ let playing = false;
 let playRaf = null;
 let lastFrameTime = 0;
 let playT = 0;
+let currentSeed = (Math.random() * 0xFFFFFFFF) >>> 0;
 
-const uploadInput = document.getElementById("upload-input");
-const uploadBtn   = document.getElementById("upload-btn");
-const sampleBtn   = document.getElementById("sample-btn");
-const tSlider     = document.getElementById("t-slider");
-const tCurrentEl  = document.getElementById("t-current");
-const tMaxEl      = document.getElementById("t-max");
-const playBtn     = document.getElementById("play-btn");
-const resetBtn    = document.getElementById("reset-btn");
-const panels      = document.querySelectorAll(".panel");
+const uploadInput   = document.getElementById("upload-input");
+const uploadBtn     = document.getElementById("upload-btn");
+const sampleBtn     = document.getElementById("sample-btn");
+const regenNoiseBtn = document.getElementById("regen-noise-btn");
+const seedValEl     = document.getElementById("seed-val");
+const tSlider       = document.getElementById("t-slider");
+const tCurrentEl    = document.getElementById("t-current");
+const tMaxEl        = document.getElementById("t-max");
+const playBtn       = document.getElementById("play-btn");
+const resetBtn      = document.getElementById("reset-btn");
+const panels        = document.querySelectorAll(".panel");
+const overviewCanvas = document.getElementById("overview-canvas");
 
 tMaxEl.textContent = T;
 tSlider.max = T;
@@ -475,8 +714,8 @@ function generateNoise(width, height) {
   const len = width * height * 3;
   const arr = new Float32Array(len);
   for (let i = 0; i < len; i += 2) {
-    let u1 = Math.random(); while (u1 === 0) u1 = Math.random();
-    const u2 = Math.random();
+    let u1 = rng(); while (u1 === 0) u1 = rng();
+    const u2 = rng();
     const r = Math.sqrt(-2 * Math.log(u1));
     const theta = 2 * Math.PI * u2;
     arr[i] = r * Math.cos(theta);
@@ -614,6 +853,134 @@ function drawCurve(canvas, alphasBar, t, color) {
   ctx.stroke();
 }
 
+function drawOverviewChart() {
+  const canvas = overviewCanvas;
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth;
+  const cssH = canvas.clientHeight;
+  if (cssW < 4 || cssH < 4) return;
+  const targetW = Math.round(cssW * dpr);
+  const targetH = Math.round(cssH * dpr);
+  if (canvas.width !== targetW || canvas.height !== targetH) {
+    canvas.width = targetW;
+    canvas.height = targetH;
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const padL = 56, padR = 132, padT = 16, padB = 30;
+  const innerW = cssW - padL - padR;
+  const innerH = cssH - padT - padB;
+  if (innerW <= 0 || innerH <= 0) return;
+
+  // grid lines
+  ctx.strokeStyle = "#262a36";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const y = padT + (i / 5) * innerH;
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(padL + innerW, y);
+    ctx.stroke();
+  }
+  for (let i = 1; i <= 3; i++) {
+    const x = padL + (i / 4) * innerW;
+    ctx.beginPath();
+    ctx.moveTo(x, padT);
+    ctx.lineTo(x, padT + innerH);
+    ctx.stroke();
+  }
+
+  // y-axis labels
+  ctx.fillStyle = "#9ca3af";
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.textAlign = "right";
+  for (let i = 0; i <= 5; i++) {
+    const v = 1 - i / 5;
+    const y = padT + (i / 5) * innerH + 3;
+    ctx.fillText(v.toFixed(1), padL - 6, y);
+  }
+  // x-axis labels
+  ctx.textAlign = "center";
+  for (let i = 0; i <= 4; i++) {
+    const tv = Math.round(T * i / 4);
+    const x = padL + (i / 4) * innerW;
+    ctx.fillText(tv.toString(), x, padT + innerH + 16);
+  }
+
+  // axis titles
+  ctx.fillStyle = "#9ca3af";
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("timestep t", padL + innerW / 2, cssH - 4);
+  ctx.save();
+  ctx.translate(16, padT + innerH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText("ᾱ_t (signal retention)", 0, 0);
+  ctx.restore();
+
+  const order = ["linear", "cosine", "exponential"];
+
+  // curves
+  for (const name of order) {
+    const sched = schedules[name];
+    ctx.beginPath();
+    for (let i = 0; i <= T; i += 2) {
+      const x = padL + (i / T) * innerW;
+      const y = padT + (1 - sched.alphasBar[i]) * innerH;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = sched.color;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+  }
+
+  // current-t marker line
+  const dx = padL + (currentT / T) * innerW;
+  ctx.strokeStyle = "#9ca3af66";
+  ctx.setLineDash([3, 4]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(dx, padT);
+  ctx.lineTo(dx, padT + innerH);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // dots at current t for each schedule
+  for (const name of order) {
+    const sched = schedules[name];
+    const dy = padT + (1 - sched.alphasBar[currentT]) * innerH;
+    ctx.beginPath();
+    ctx.arc(dx, dy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.strokeStyle = sched.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // legend
+  const legendX = padL + innerW + 18;
+  let legendY = padT + 12;
+  ctx.textAlign = "left";
+  for (const name of order) {
+    const sched = schedules[name];
+    ctx.fillStyle = sched.color;
+    ctx.fillRect(legendX, legendY - 4, 14, 3);
+    ctx.fillStyle = "#e8eaef";
+    ctx.font = "12px sans-serif";
+    ctx.fillText(name, legendX + 20, legendY + 1);
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.fillText("ᾱ=" + fmt(sched.alphasBar[currentT]), legendX + 20, legendY + 15);
+    legendY += 32;
+  }
+}
+
 function fmt(x) {
   if (x === 0) return "0.0000";
   const a = Math.abs(x);
@@ -641,6 +1008,144 @@ function render() {
     drawCurve(panel.querySelector(".curve-canvas"), sched.alphasBar, currentT, sched.color);
     applyNoise(originalImageDataSmall, noiseSmall, sched.alphasBar[T], panel.querySelector(".final-canvas"));
   });
+  drawOverviewChart();
+}
+
+// ─── Denoising (reverse diffusion) ────────────────────────────────────────────
+// Run actual DDPM-style sampling — start from x_T ~ 𝒩(0, I) and step backwards
+// using the closed-form posterior q(x_{t-1} | x_t, x_0) with a perfect-oracle
+// denoiser (i.e. ε̂ = ε*). This is the same Markov chain a trained model
+// approximates; we just substitute the optimal ε prediction at each step so we
+// can run it client-side without shipping model weights.
+
+function getX0Float(width, height) {
+  if (!originalImageData) return null;
+  const tmp = document.createElement("canvas");
+  tmp.width = width; tmp.height = height;
+  const tctx = tmp.getContext("2d");
+  const fullCanvas = document.createElement("canvas");
+  fullCanvas.width = IMG_SIZE; fullCanvas.height = IMG_SIZE;
+  fullCanvas.getContext("2d").putImageData(originalImageData, 0, 0);
+  tctx.drawImage(fullCanvas, 0, 0, width, height);
+  const id = tctx.getImageData(0, 0, width, height);
+  const N = width * height;
+  const x0 = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    x0[i * 3]     = id.data[i * 4]     / 127.5 - 1;
+    x0[i * 3 + 1] = id.data[i * 4 + 1] / 127.5 - 1;
+    x0[i * 3 + 2] = id.data[i * 4 + 2] / 127.5 - 1;
+  }
+  return x0;
+}
+
+function runDenoising(scheduleName) {
+  const sched = schedules[scheduleName];
+  const W = DENOISE_SIZE, H = DENOISE_SIZE, N = W * H, len = N * 3;
+  const x0 = getX0Float(W, H);
+  if (!x0) return [];
+
+  const x = generateNoise(W, H);
+
+  // sampling timesteps: T → 0 with stride
+  const times = [];
+  for (let t = T; t > 0; t -= DENOISE_STRIDE) times.push(t);
+  times.push(0);
+  const numTransitions = times.length - 1;
+
+  const snapStepIdx = new Set();
+  for (let f = 0; f < DENOISE_FRAMES; f++) {
+    snapStepIdx.add(Math.round(numTransitions * f / (DENOISE_FRAMES - 1)));
+  }
+
+  const snapshots = [];
+  if (snapStepIdx.has(0)) {
+    snapshots.push({ t: times[0], data: new Float32Array(x) });
+  }
+
+  for (let s = 0; s < numTransitions; s++) {
+    const t      = times[s];
+    const tPrev  = times[s + 1];
+    const aBar_t = sched.alphasBar[t];
+    const aBar_p = sched.alphasBar[tPrev];
+
+    const sa_t = Math.sqrt(Math.max(aBar_t, 0));
+    const sn_t = Math.sqrt(Math.max(1 - aBar_t, 1e-12));
+    const sa_p = Math.sqrt(Math.max(aBar_p, 0));
+
+    // η=1 stochastic DDIM (matches DDPM marginals when stride=1)
+    let sigmaSq = 0;
+    if (tPrev > 0 && aBar_p > 1e-12) {
+      sigmaSq = (1 - aBar_p) / Math.max(1 - aBar_t, 1e-12) * (1 - aBar_t / aBar_p);
+      if (!isFinite(sigmaSq) || sigmaSq < 0) sigmaSq = 0;
+    }
+    const sigma = Math.sqrt(sigmaSq);
+    const sn_p_dir = Math.sqrt(Math.max(1 - aBar_p - sigmaSq, 0));
+
+    const z = sigma > 0 ? generateNoise(W, H) : null;
+
+    for (let i = 0; i < len; i++) {
+      const eps = (x[i] - sa_t * x0[i]) / sn_t; // oracle ε
+      x[i] = sa_p * x0[i] + sn_p_dir * eps + (z ? sigma * z[i] : 0);
+    }
+
+    if (snapStepIdx.has(s + 1)) {
+      snapshots.push({ t: tPrev, data: new Float32Array(x) });
+    }
+  }
+  return snapshots;
+}
+
+function renderDenoiseStrip(scheduleName, snapshots) {
+  const row = document.querySelector(`.denoise-row[data-schedule="${scheduleName}"]`);
+  if (!row) return;
+  const frames = row.querySelectorAll(".denoise-frame");
+  for (let i = 0; i < frames.length; i++) {
+    const frame = frames[i];
+    const canvas = frame.querySelector("canvas");
+    const tLabel = frame.querySelector("span");
+    if (i >= snapshots.length) {
+      tLabel.textContent = "—";
+      continue;
+    }
+    const snap = snapshots[i];
+    if (canvas.width !== DENOISE_SIZE) canvas.width = DENOISE_SIZE;
+    if (canvas.height !== DENOISE_SIZE) canvas.height = DENOISE_SIZE;
+    const ctx = canvas.getContext("2d");
+    const out = ctx.createImageData(DENOISE_SIZE, DENOISE_SIZE);
+    const N = DENOISE_SIZE * DENOISE_SIZE;
+    const data = snap.data;
+    for (let p = 0; p < N; p++) {
+      const p3 = p * 3, p4 = p * 4;
+      for (let c = 0; c < 3; c++) {
+        const v = (data[p3 + c] + 1) * 127.5;
+        out.data[p4 + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+      }
+      out.data[p4 + 3] = 255;
+    }
+    ctx.putImageData(out, 0, 0);
+    tLabel.textContent = "t=" + snap.t;
+  }
+}
+
+function renderAllDenoising() {
+  if (!originalImageData) return;
+  for (const name of ["linear", "cosine", "exponential"]) {
+    const snaps = runDenoising(name);
+    renderDenoiseStrip(name, snaps);
+  }
+}
+
+function refreshSeedDisplay() {
+  if (seedValEl) seedValEl.textContent = (currentSeed >>> 0);
+}
+
+function applySeed() {
+  setSeed(currentSeed);
+  if (!originalImageData) return;
+  noiseBig   = generateNoise(IMG_SIZE, IMG_SIZE);
+  noiseSmall = generateNoise(FINAL_SIZE, FINAL_SIZE);
+  render();
+  renderAllDenoising();
 }
 
 function processImage(img) {
@@ -667,9 +1172,7 @@ function processImage(img) {
   sCtx.drawImage(canvas, 0, 0, FINAL_SIZE, FINAL_SIZE);
   originalImageDataSmall = sCtx.getImageData(0, 0, FINAL_SIZE, FINAL_SIZE);
 
-  noiseBig = generateNoise(IMG_SIZE, IMG_SIZE);
-  noiseSmall = generateNoise(FINAL_SIZE, FINAL_SIZE);
-  render();
+  applySeed();
 }
 
 function generateSampleImage() {
@@ -809,6 +1312,12 @@ function pause() {
 playBtn.addEventListener("click", () => { playing ? pause() : play(); });
 resetBtn.addEventListener("click", () => { pause(); setT(0); });
 
+regenNoiseBtn.addEventListener("click", () => {
+  currentSeed = (Math.random() * 0xFFFFFFFF) >>> 0;
+  refreshSeedDisplay();
+  applySeed();
+});
+
 // keyboard: space = play/pause, arrows = step
 window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
@@ -817,7 +1326,10 @@ window.addEventListener("keydown", (e) => {
   else if (e.code === "ArrowRight") { pause(); setT(currentT + (e.shiftKey ? 50 : 10)); }
 });
 
-window.addEventListener("load",  () => processImage(generateSampleImage()));
+window.addEventListener("load", () => {
+  refreshSeedDisplay();
+  processImage(generateSampleImage());
+});
 window.addEventListener("resize", () => { if (originalImageData) render(); });
 </script>
 </body>
