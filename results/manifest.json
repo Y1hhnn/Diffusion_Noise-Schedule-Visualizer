@@ -6,22 +6,28 @@
   "num_steps": 100,
   "eta": 0.0,
   "strengths": [
-    0.3,
-    0.5,
-    0.7,
-    0.9
+    0.1,
+    0.2,
+    0.4,
+    0.6,
+    0.8,
+    1.0
   ],
   "strength_tags": {
-    "s030": 0.3,
-    "s050": 0.5,
-    "s070": 0.7,
-    "s090": 0.9
+    "s010": 0.1,
+    "s020": 0.2,
+    "s040": 0.4,
+    "s060": 0.6,
+    "s080": 0.8,
+    "s100": 1.0
   },
   "t_start_per_strength": {
-    "s030": 300,
-    "s050": 500,
-    "s070": 700,
-    "s090": 900
+    "s010": 100,
+    "s020": 200,
+    "s040": 400,
+    "s060": 600,
+    "s080": 800,
+    "s100": 1000
   },
   "target_alphas": [
     0.8,
@@ -230,44 +236,64 @@
     0
   ],
   "denoise_timesteps_per_strength": {
-    "s030": [
-      300,
+    "s010": [
+      100,
+      86,
+      71,
+      57,
+      43,
+      29,
+      14,
+      0
+    ],
+    "s020": [
+      200,
+      172,
+      142,
+      114,
+      86,
+      58,
+      28,
+      0
+    ],
+    "s040": [
+      400,
+      344,
+      284,
+      228,
+      172,
+      116,
+      56,
+      0
+    ],
+    "s060": [
+      600,
+      516,
+      426,
+      342,
       258,
-      213,
-      171,
-      129,
-      87,
-      42,
+      174,
+      84,
       0
     ],
-    "s050": [
-      500,
+    "s080": [
+      800,
+      688,
+      568,
+      456,
+      344,
+      232,
+      112,
+      0
+    ],
+    "s100": [
+      1000,
+      860,
+      710,
+      570,
       430,
-      355,
-      285,
-      215,
-      145,
-      70,
-      0
-    ],
-    "s070": [
-      700,
-      602,
-      497,
-      399,
-      301,
-      203,
-      98,
-      0
-    ],
-    "s090": [
-      900,
-      774,
-      639,
-      513,
-      387,
-      261,
-      126,
+      290,
+      140,
       0
     ]
   },
@@ -287,7 +313,10 @@
     "exponential"
   ],
   "images": [
-    "cake"
+    "cake",
+    "dog",
+    "flower",
+    "tree"
   ],
-  "pipeline": "shared \u03b5 per (image, schedule, seed) across all strengths; forward x_t closed-form for t \u2208 [0, T]; reverse (img2img) starts from x_{round(s \u00b7 T)} for each s \u2208 [0.3, 0.5, 0.7, 0.9] and runs \u03b7=0.0 DDIM, 100 steps \u2192 0"
+  "pipeline": "shared \u03b5 per (image, schedule, seed) across all strengths; forward x_t closed-form for t \u2208 [0, T]; reverse (img2img) starts from x_{round(s \u00b7 T)} for each s \u2208 [0.1, 0.2, 0.4, 0.6, 0.8, 1.0] and runs \u03b7=0.0 DDIM, 100 steps \u2192 0"
 }
