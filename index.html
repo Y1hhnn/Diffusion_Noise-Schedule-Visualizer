@@ -2446,13 +2446,25 @@ if (viewModeEl) {
   viewModeEl.addEventListener("click", (e) => {
     const btn = e.target.closest(".view-btn");
     if (!btn) return;
-    setLayoutMode(btn.dataset.layout);
+    // Mark this as user-initiated so window resizes stop overriding the choice.
+    setLayoutMode(btn.dataset.layout, /*userInitiated=*/ true);
   });
 }
 
+// Auto-pick horizontal when there's enough width for a comfortable two-column
+// layout (each phase needs ≈ 580 px to hold the 3-panel schedule grid + denoise
+// strip without squeezing). Below this we fall back to vertical.
+const HORIZONTAL_BREAKPOINT = 1200;
 let layoutMode = "horizontal";
-function setLayoutMode(mode) {
+let userExplicitlySetLayout = false;
+
+function preferredLayoutFromWidth() {
+  return window.innerWidth >= HORIZONTAL_BREAKPOINT ? "horizontal" : "vertical";
+}
+
+function setLayoutMode(mode, userInitiated = false) {
   if (mode !== "vertical" && mode !== "horizontal") return;
+  if (userInitiated) userExplicitlySetLayout = true;
   if (mode === layoutMode) return;
   layoutMode = mode;
   document.body.classList.toggle("layout-horizontal", mode === "horizontal");
@@ -2562,9 +2574,16 @@ window.addEventListener("keydown", (e) => {
 
 async function init() {
   // Seed the body class so CSS-driven mode-specific text starts in the right
-  // state on load (default: timestep mode + vertical layout).
+  // state on load. Layout auto-picks based on window width unless the user
+  // has already clicked a view-toggle button (they haven't on first load).
   document.body.classList.add("compare-" + compareMode);
+  if (!userExplicitlySetLayout) layoutMode = preferredLayoutFromWidth();
   document.body.classList.add("layout-" + layoutMode);
+  if (viewModeEl) {
+    for (const b of viewModeEl.querySelectorAll(".view-btn")) {
+      b.classList.toggle("active", b.dataset.layout === layoutMode);
+    }
+  }
   refreshSeedDisplay();
   setCacheStatus("loading manifest…", "loading");
   try {
@@ -2672,7 +2691,24 @@ function setupPhaseObserver() {
 }
 
 window.addEventListener("load", init);
-window.addEventListener("resize", () => { if (manifest) render(); });
+// Debounced resize: re-render canvases at the new sizes AND re-evaluate the
+// preferred layout (unless the user has explicitly clicked a view-toggle).
+let _resizeTimer = null;
+window.addEventListener("resize", () => {
+  if (_resizeTimer) clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    _resizeTimer = null;
+    if (!userExplicitlySetLayout) {
+      const pref = preferredLayoutFromWidth();
+      if (pref !== layoutMode) {
+        // setLayoutMode also re-renders, so we don't need a separate call.
+        setLayoutMode(pref, /*userInitiated=*/ false);
+        return;
+      }
+    }
+    if (manifest) render();
+  }, 150);
+});
 </script>
 </body>
 </html>
